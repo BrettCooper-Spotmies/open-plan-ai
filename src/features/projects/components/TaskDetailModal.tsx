@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useLayoutEffect, useRef } from 'react';
 import { attachmentsService } from '@/services/attachments.service';
-import { format, isBefore, isAfter, parseISO } from 'date-fns';
+import { format, isBefore, isAfter, parseISO, startOfDay } from 'date-fns';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { LinkHighlightTextarea } from '@/components/ui/LinkHighlightTextarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -57,7 +58,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+import { cn, getDisplayId } from '@/lib/utils';
 import {
   X,
   Calendar as CalendarIcon,
@@ -110,11 +111,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { renamePastedImageFile } from '@/utils/pastedFile';
 import { FilePreviewDialog, FilePreviewTarget, getVideoThumbnail } from '@/components/FilePreviewDialog';
-import { useProjectTags, useCreateTag, useUpdateTag } from '@/hooks/useProjectTags';
+import { useProjectTags, useCreateTag, useUpdateTag, useDeleteTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
 import { Switch } from '@/components/ui/switch';
-import { SlashBlockEditor } from '@/components/ui/SlashBlockEditor';
+import { SlashBlockEditor, EditorBlock } from '@/components/ui/SlashBlockEditor';
+import { blocksToPlainText, hasBlockContent, plainTextToBlocks, serializeBlocksForDirtyCheck } from '@/lib/descriptionBlocks';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import { ISSUE_SEVERITY_OPTIONS, ISSUE_SEVERITY_DISPLAY } from './issueSeverity';
 import { formatModifiedFields } from './modifiedFields';
@@ -148,6 +151,8 @@ interface TaskDetailModalProps {
   statusOptions?: Array<{ value: string; label: string; color?: string }>;
   /** Shown as a read-only "Project" field in the metadata grid when provided. Only pass this from contexts (like My Day) where the task's project isn't already implied by the surrounding page. */
   projectName?: string;
+  /** Project's short display-ID prefix — renders a "{projectCode}-T-{number}" pill next to the title when both this and the task's number are available. */
+  projectCode?: string;
   /** Pre-populates the Assigned To field when creating a new task (mode="create"). Opt-in — leave unset to keep the field empty by default. */
   defaultAssignees?: TeamMember[];
 }
@@ -160,6 +165,8 @@ function StatusDot({ color }: { color: string }) {
   }
   return <span className={cn('w-2 h-2 rounded-full inline-block shrink-0', color)} />;
 }
+
+const MAX_TAG_LENGTH = 20;
 
 const DEFAULT_STATUS_OPTIONS: { value: string; label: string; color: string }[] = [
   { value: 'backlog', label: 'Backlog', color: 'bg-[#6b7280]' },
@@ -197,6 +204,7 @@ const serializeTaskForDirtyCheck = (task: Task): string => {
   return JSON.stringify({
     title: task.title || '',
     description: task.description || '',
+    descriptionBlocks: serializeBlocksForDirtyCheck(task.descriptionBlocks),
     status: task.status,
     priority: task.priority,
     module: task.module || null,
@@ -237,6 +245,7 @@ export const TaskDetailModal = ({
   assignableMembers,
   statusOptions: providedStatusOptions,
   projectName,
+  projectCode,
   defaultAssignees,
 }: TaskDetailModalProps) => {
   const { user: profile } = useAuth();
@@ -272,7 +281,9 @@ export const TaskDetailModal = ({
   const [newComment, setNewComment] = useState('');
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingCommentValue, setEditingCommentValue] = useState('');
-  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [pendingNewCommentIds, setPendingNewCommentIds] = useState<Set<string>>(new Set());
+  const [pendingEditedComments, setPendingEditedComments] = useState<Map<string, string>>(new Map());
+  const [pendingDeletedCommentIds, setPendingDeletedCommentIds] = useState<Set<string>>(new Set());
   const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
   const [isModulePopoverOpen, setIsModulePopoverOpen] = useState(false);
   const [isBlockingTaskPopoverOpen, setIsBlockingTaskPopoverOpen] = useState(false);
@@ -286,7 +297,7 @@ export const TaskDetailModal = ({
   const [editingTagOriginal, setEditingTagOriginal] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-  const [pendingFileUrls, setPendingFileUrls] = useState<(string | null)[]>([]);
+  const [pendingFileUrls, setPendingFileUrls] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
@@ -375,12 +386,59 @@ export const TaskDetailModal = ({
     [editedTask.tags, tagSuggestions]
   );
 
+  // A tag can only be removed from the project registry when nothing still
+  // references it — deleting one that's in use would silently strip it from
+  // every task and issue that had it, so those are refused with a message
+  // naming what still holds it. The backend enforces the same rule.
+  const deleteTagMutation = useDeleteTag(effectiveProjectId);
+  const [tagPendingDelete, setTagPendingDelete] = useState<{ id: string; name: string } | null>(null);
+
+  const requestTagDelete = (e: React.MouseEvent, tagName: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const registryTag = projectTags.find((t) => t.name.toLowerCase() === tagName.toLowerCase());
+    if (!registryTag) {
+      toast.error(`"${tagName}" isn't a saved project tag yet`);
+      return;
+    }
+    const { taskCount, issueCount } = registryTag;
+    if (taskCount > 0 || issueCount > 0) {
+      const parts = [
+        taskCount > 0 ? `${taskCount} task${taskCount === 1 ? '' : 's'}` : null,
+        issueCount > 0 ? `${issueCount} issue${issueCount === 1 ? '' : 's'}` : null,
+      ].filter(Boolean);
+      toast.error(`"${registryTag.name}" is still in use`, {
+        description: `Attached to ${parts.join(' and ')}. Remove it there before deleting the tag.`,
+      });
+      return;
+    }
+    setTagPendingDelete({ id: registryTag.id, name: registryTag.name });
+  };
+
+  // Blocks a tag input at MAX_TAG_LENGTH instead of letting the user type
+  // past it and only finding out at task-create time — see handleCreate,
+  // which fires onCreate without awaiting it, so a backend rejection (e.g.
+  // the old 50-char limit) closed the modal with the task never created.
+  const handleTagInputChange = (rawValue: string, setValue: (value: string) => void) => {
+    if (rawValue.length > MAX_TAG_LENGTH) {
+      toast.error(`Tags must be ${MAX_TAG_LENGTH} characters or less`);
+      setValue(rawValue.slice(0, MAX_TAG_LENGTH));
+      return;
+    }
+    setValue(rawValue);
+  };
+
   // Always upserts against the shared project tag registry first — this is
   // what makes a tag created here show up (with the same color) when adding
   // tags to an issue, or any other task, in the same project.
   const addTag = async (rawValue: string) => {
     const value = rawValue.trim();
     if (!value) return;
+
+    if (value.length > MAX_TAG_LENGTH) {
+      toast.error(`Tags must be ${MAX_TAG_LENGTH} characters or less`);
+      return;
+    }
 
     setTagSearch('');
     setIsTagPopoverOpen(false);
@@ -399,6 +457,11 @@ export const TaskDetailModal = ({
   const saveEditedTag = () => {
     if (editingTagIndex === null && !editingTagOriginal) return;
     const value = editingTagValue.trim();
+
+    if (value.length > MAX_TAG_LENGTH) {
+      toast.error(`Tags must be ${MAX_TAG_LENGTH} characters or less`);
+      return;
+    }
 
     const nextTags = [...editedTask.tags];
     const targetIndex =
@@ -472,9 +535,9 @@ export const TaskDetailModal = ({
   }, [isOpen, task?.id, mode]);
 
   useEffect(() => {
-    const urls = pendingFiles.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+    const urls = pendingFiles.map(f => URL.createObjectURL(f));
     setPendingFileUrls(urls);
-    return () => { urls.forEach(url => { if (url) URL.revokeObjectURL(url); }); };
+    return () => { urls.forEach(url => URL.revokeObjectURL(url)); };
   }, [pendingFiles]);
 
   // The task payload returned by the project/task endpoints never embeds
@@ -497,13 +560,21 @@ export const TaskDetailModal = ({
           uploadedBy: uploader ?? { id: '', name: 'Unknown', email: '', role: '', initials: '?' },
         };
       });
-      setEditedTask(prev => ({ ...prev, attachments: mapped }));
+      setEditedTask(prev => {
+        const updated = { ...prev, attachments: mapped };
+        setInitialTaskSnapshot(current => current === '' ? current : serializeTaskForDirtyCheck(updated));
+        return updated;
+      });
     }).catch(() => { });
     return () => { cancelled = true; };
   }, [isOpen, task?.id, mode]);
 
-  // Initialize form baselines once per modal session key
-  useEffect(() => {
+  // Initialize form baselines once per modal session key. useLayoutEffect
+  // (not useEffect) — this modal instance is reused across different tasks
+  // opened one after another, so a regular useEffect (which runs after
+  // paint) would show a frame of the PREVIOUS task's data before this reset
+  // catches up: a visible flash when switching tasks quickly.
+  useLayoutEffect(() => {
     if (!isOpen) {
       setInitializedForKey(null);
       setPreviewingFile(null);
@@ -570,12 +641,53 @@ export const TaskDetailModal = ({
     ...blockingToTaskIds,
   ]), [blockingToTaskIds, editedTask.blockedBy, editedTask.id]);
 
-  const handleFieldChange = <K extends keyof Task>(field: K, value: Task[K]) => {
+  const handleFieldsChange = (patch: Partial<Task>) => {
     setEditedTask(prev => ({
       ...prev,
-      [field]: value,
+      ...patch,
       updatedAt: new Date().toISOString()
     }));
+  };
+
+  const handleFieldChange = <K extends keyof Task>(field: K, value: Task[K]) => {
+    handleFieldsChange({ [field]: value } as Partial<Task>);
+  };
+
+  // Advanced blocks are the source of truth while the toggle is on, but the
+  // plain `description` is what every board card, list row and preview renders
+  // — so mirror the flattened text across on every block edit. Without it an
+  // advanced-only edit saved fine yet showed up nowhere, which reads as
+  // "the update didn't happen".
+  const handleDescriptionBlocksChange = (blocks: EditorBlock[]) => {
+    handleFieldsChange({
+      descriptionBlocks: blocks,
+      description: blocksToPlainText(blocks),
+    });
+  };
+
+  const handleAdvancedDescriptionToggle = (enabled: boolean) => {
+    if (enabled) {
+      // Carry whatever is in the plain box into the editor instead of dropping
+      // the user in front of an empty one.
+      if (!hasBlockContent(editedTask.descriptionBlocks as EditorBlock[] | undefined)) {
+        const seeded = plainTextToBlocks(editedTask.description);
+        if (seeded.length > 0) {
+          handleFieldsChange({
+            descriptionBlocks: seeded,
+            description: blocksToPlainText(seeded),
+          });
+        }
+      }
+    } else {
+      // Going back to simple mode: keep the text, drop the blocks — a task that
+      // still has blocks reopens in advanced mode.
+      const flattened = blocksToPlainText(editedTask.descriptionBlocks as EditorBlock[] | undefined);
+      handleFieldsChange({
+        description: flattened || editedTask.description || '',
+        descriptionBlocks: [],
+      });
+    }
+    setIsAdvancedDescription(enabled);
   };
 
   const handleStatusChange = (value: TaskStatus) => {
@@ -594,10 +706,31 @@ export const TaskDetailModal = ({
   };
 
   const handleCancel = () => {
-    // Reset local edits back to original task from props
+    setNewComment('');
+    setEditingCommentId(null);
+    setEditingCommentValue('');
+    setPendingNewCommentIds(new Set());
+    setPendingEditedComments(new Map());
+    setPendingDeletedCommentIds(new Set());
+    setNewChecklistItem('');
+    setEditingChecklistId(null);
+    setEditingChecklistValue('');
+    setVideoLinkInput('');
+    setTagSearch('');
+    setEditingTagIndex(null);
+    setEditingTagValue('');
+    setEditingTagOriginal(null);
+
     if (task) {
       setEditedTask(task);
+      const linkedTaskIds = task.id
+        ? allTasks.filter(t => t.blockedBy?.includes(task.id)).map(t => t.id)
+        : [];
+      setLocalBlockingToIds(linkedTaskIds);
+    } else {
+      setPendingFiles([]);
     }
+
     onClose();
   };
 
@@ -611,6 +744,11 @@ export const TaskDetailModal = ({
 
     if (!editedTask.startDate) {
       toast.error('Start date is required');
+      return;
+    }
+
+    if (isBefore(startOfDay(parseISO(editedTask.startDate)), startOfDay(new Date()))) {
+      toast.error('Start date cannot be in the past');
       return;
     }
 
@@ -773,7 +911,7 @@ export const TaskDetailModal = ({
     for (const item of Array.from(items)) {
       if (item.kind === 'file' && item.type.startsWith('image/')) {
         const file = item.getAsFile();
-        if (file) imageFiles.push(file);
+        if (file) imageFiles.push(renamePastedImageFile(file, imageFiles.length));
       }
     }
     if (imageFiles.length === 0) return;
@@ -863,7 +1001,14 @@ export const TaskDetailModal = ({
     (editedTask.linkedIssueIds?.length || 0) > 0;
   const isBlockedWithoutDependencies = editedTask.status === 'blocked' && !hasDependenciesForBlocked;
   const isTaskDirty = initialTaskSnapshot !== '' && normalizedEditedTaskSnapshot !== initialTaskSnapshot;
-  const isFormDirty = isTaskDirty || hasBlockingToChanges || hasBlockedByChanges || pendingFiles.length > 0;
+  // Comment add/edit/delete is staged locally (see handleDeleteComment etc.)
+  // and only actually persisted inside handleUpdateTask — so without these,
+  // deleting or editing a comment and then hitting Cancel/X skipped the
+  // unsaved-changes confirmation entirely and silently discarded it.
+  const hasPendingCommentChanges =
+    pendingNewCommentIds.size > 0 || pendingEditedComments.size > 0 || pendingDeletedCommentIds.size > 0;
+  const isFormDirty =
+    isTaskDirty || hasBlockingToChanges || hasBlockedByChanges || pendingFiles.length > 0 || hasPendingCommentChanges;
   const canSubmitTask = Boolean(
     editedTask.title &&
     editedTask.startDate &&
@@ -889,59 +1034,27 @@ export const TaskDetailModal = ({
     const content = newComment.trim();
     setNewComment('');
 
-    // If in view mode, persist to DB immediately
-    if (mode !== 'create' && editedTask.id) {
-      try {
-        const dbComment = await commentsService.create({
-          author_id: profile.id,
-          content: content,
-          entity_id: editedTask.id,
-          entity_type: 'task',
-        });
-
-        const newCommentObj: Comment = {
-          id: dbComment.id,
-          content: dbComment.content,
-          author: {
-            id: profile.id,
-            name: profile.name || profile.email,
-            initials: profile.initials || '',
-            avatar: profile.avatarUrl || undefined,
-            email: profile.email,
-            role: 'member'
-          },
-          createdAt: dbComment.createdAt || new Date().toISOString(),
-        };
-
-        setEditedTask(prev => ({
-          ...prev,
-          comments: [...(prev.comments || []), newCommentObj]
-        }));
-
-      } catch (error) {
-        logger.error('Failed to add comment:', error);
-        setNewComment(content);
-        toast.error('Failed to add comment');
-      }
-    } else {
-      // Just update local state for new tasks
-      const newCommentObj: Comment = {
-        id: `comment-${Date.now()}`,
-        content: content,
-        author: {
-          id: profile.id,
-          name: profile.name || profile.email,
-          initials: profile.initials || '',
-          avatar: profile.avatarUrl || undefined,
-          email: profile.email,
-          role: profile.role || 'member'
-        },
-        createdAt: new Date().toISOString(),
-      };
-      setEditedTask(prev => ({
-        ...prev,
-        comments: [...(prev.comments || []), newCommentObj]
-      }));
+    // Stage locally; only persisted to the DB when "Update" is clicked (see handleUpdateTask)
+    const newCommentId = `comment-${Date.now()}`;
+    const newCommentObj: Comment = {
+      id: newCommentId,
+      content: content,
+      author: {
+        id: profile.id,
+        name: profile.name || profile.email,
+        initials: profile.initials || '',
+        avatar: profile.avatarUrl || undefined,
+        email: profile.email,
+        role: profile.role || 'member'
+      },
+      createdAt: new Date().toISOString(),
+    };
+    setEditedTask(prev => ({
+      ...prev,
+      comments: [...(prev.comments || []), newCommentObj]
+    }));
+    if (mode !== 'create') {
+      setPendingNewCommentIds(prev => new Set(prev).add(newCommentId));
     }
   };
 
@@ -960,45 +1073,41 @@ export const TaskDetailModal = ({
     const commentId = editingCommentId;
     const content = editingCommentValue.trim();
 
-    if (mode !== 'create') {
-      try {
-        await commentsService.update(commentId, content);
-      } catch (error) {
-        logger.error('Failed to update comment:', error);
-        toast.error('Failed to update comment');
-        return;
-      }
-    }
-
+    // Stage locally; only persisted to the DB when "Update" is clicked (see handleUpdateTask)
     setEditedTask(prev => ({
       ...prev,
       comments: (prev.comments || []).map(c =>
         c.id === commentId ? { ...c, content } : c
       ),
     }));
+    if (mode !== 'create' && !pendingNewCommentIds.has(commentId)) {
+      setPendingEditedComments(prev => new Map(prev).set(commentId, content));
+    }
     setEditingCommentId(null);
     setEditingCommentValue('');
   };
 
-  const handleDeleteComment = async () => {
-    if (!deletingCommentId) return;
-    const commentId = deletingCommentId;
-    setDeletingCommentId(null);
-
-    if (mode !== 'create') {
-      try {
-        await commentsService.delete(commentId);
-      } catch (error) {
-        logger.error('Failed to delete comment:', error);
-        toast.error('Failed to delete comment');
-        return;
-      }
-    }
-
+  const handleDeleteComment = async (commentId: string) => {
+    // Stage locally; only persisted to the DB when "Update" is clicked (see handleUpdateTask)
     setEditedTask(prev => ({
       ...prev,
       comments: (prev.comments || []).filter(c => c.id !== commentId),
     }));
+    if (pendingNewCommentIds.has(commentId)) {
+      setPendingNewCommentIds(prev => {
+        const next = new Set(prev);
+        next.delete(commentId);
+        return next;
+      });
+    } else if (mode !== 'create') {
+      setPendingDeletedCommentIds(prev => new Set(prev).add(commentId));
+    }
+    setPendingEditedComments(prev => {
+      if (!prev.has(commentId)) return prev;
+      const next = new Map(prev);
+      next.delete(commentId);
+      return next;
+    });
   };
 
   const availableTasksForBlocking = allTasks.filter(
@@ -1028,6 +1137,41 @@ export const TaskDetailModal = ({
     try {
       // Commit the main task changes
       await onUpdate(editedTask);
+
+      // Commit staged comment changes (add/edit/delete) now that Update was confirmed
+      if (mode !== 'create' && editedTask.id) {
+        for (const id of pendingDeletedCommentIds) {
+          try {
+            await commentsService.delete(id);
+          } catch (error) {
+            logger.error('Failed to delete comment:', error);
+          }
+        }
+        for (const [id, content] of pendingEditedComments) {
+          try {
+            await commentsService.update(id, content);
+          } catch (error) {
+            logger.error('Failed to update comment:', error);
+          }
+        }
+        for (const id of pendingNewCommentIds) {
+          const comment = editedTask.comments?.find(c => c.id === id);
+          if (!comment || !profile) continue;
+          try {
+            await commentsService.create({
+              author_id: profile.id,
+              content: comment.content,
+              entity_id: editedTask.id,
+              entity_type: 'task',
+            });
+          } catch (error) {
+            logger.error('Failed to add comment:', error);
+          }
+        }
+        setPendingDeletedCommentIds(new Set());
+        setPendingEditedComments(new Map());
+        setPendingNewCommentIds(new Set());
+      }
 
       // Compute blocking-to diffs: tasks where THIS task is listed in their blockedBy
       const originalBlockingToIds = allTasks
@@ -1220,7 +1364,7 @@ export const TaskDetailModal = ({
           className={cn(
             'p-0 flex flex-col gap-0 overflow-hidden',
             isMobile
-              ? 'inset-0 left-0 top-0 h-[100dvh] w-screen max-w-none max-h-none translate-x-0 translate-y-0 rounded-none border-0'
+              ? 'inset-0 left-0 top-0 h-[100dvh] w-screen max-w-none max-h-none translate-x-0 translate-y-0 rounded-none border-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom duration-300 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100'
               : 'max-w-4xl max-h-[90vh]'
           )}
           hideClose
@@ -1272,7 +1416,7 @@ export const TaskDetailModal = ({
                   ) : (
                     <DropdownMenuItem
                       onClick={handleUpdateTask}
-                      disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask}
+                      disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask || !isFormDirty}
                     >
                       <Check className="h-4 w-4 mr-2" />
                       Update Task
@@ -1294,7 +1438,14 @@ export const TaskDetailModal = ({
             </div>
           ) : mode !== 'create' && (
             <div className="flex items-center justify-between px-6 py-3 border-b shrink-0">
-              <DialogTitle className="text-sm font-medium text-muted-foreground">Task</DialogTitle>
+              <div className="flex items-center gap-2">
+                <DialogTitle className="text-sm font-medium text-muted-foreground">Task</DialogTitle>
+                {getDisplayId(projectCode, 'T', task?.number) && (
+                  <span className="font-mono font-semibold text-[12px] text-blue-500">
+                    {getDisplayId(projectCode, 'T', task?.number)}
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-1">
                 <DialogClose asChild>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
@@ -1316,6 +1467,11 @@ export const TaskDetailModal = ({
               {showMobileHeader && projectName && (
                 <p className="text-xs text-muted-foreground -mb-2">
                   {projectName} <span className="mx-1">›</span> Board
+                  {getDisplayId(projectCode, 'T', task?.number) && (
+                    <span className="ml-2 font-mono font-semibold text-blue-500">
+                      {getDisplayId(projectCode, 'T', task?.number)}
+                    </span>
+                  )}
                 </p>
               )}
               <div className="space-y-2">
@@ -1399,7 +1555,7 @@ export const TaskDetailModal = ({
                         {(editedTask.assignees || []).length > 0 && (
                           <div className="p-2 border-b">
                             <p className="text-xs font-medium text-muted-foreground px-2 mb-1">Assigned</p>
-                            {(editedTask.assignees || []).map((assignee) => (
+                            {[...(editedTask.assignees || [])].sort((a, b) => a.name.localeCompare(b.name)).map((assignee) => (
                               <div key={assignee.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted group">
                                 <Avatar className="h-6 w-6 shrink-0">
                                   <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
@@ -1440,6 +1596,7 @@ export const TaskDetailModal = ({
                             <CommandGroup heading="Add members">
                               {availableAssignees
                                 .filter(m => !editedTask.assignees?.some(a => a.id === m.id))
+                                .sort((a, b) => a.name.localeCompare(b.name))
                                 .map((member) => (
                                   <CommandItem
                                     key={member.id}
@@ -1449,12 +1606,12 @@ export const TaskDetailModal = ({
                                     }}
                                     className="cursor-pointer"
                                   >
-                                    <div className="flex items-center gap-2">
-                                      <Avatar className="h-5 w-5">
+                                    <div className="flex items-start gap-2">
+                                      <Avatar className="h-5 w-5 mt-0.5 shrink-0">
                                         <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
                                         <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
                                       </Avatar>
-                                      {member.name}
+                                      <span className="min-w-0">{member.name}</span>
                                     </div>
                                   </CommandItem>
                                 ))}
@@ -1595,7 +1752,12 @@ export const TaskDetailModal = ({
                               handleFieldChange('startDate', toDateOnly(date || undefined));
                               setIsStartDatePopoverOpen(false);
                             }}
+                            fromDate={mode === 'create' ? startOfDay(new Date()) : undefined}
                             disabled={(date) => {
+                              // New tasks can only start today or later
+                              if (mode === 'create' && isBefore(startOfDay(date), startOfDay(new Date()))) {
+                                return true;
+                              }
                               if (editedTask.dueDate) {
                                 return isAfter(date, parseISO(editedTask.dueDate));
                               }
@@ -2034,7 +2196,8 @@ export const TaskDetailModal = ({
                                 <Input
                                   autoFocus
                                   value={editingTagValue}
-                                  onChange={(e) => setEditingTagValue(e.target.value)}
+                                  onChange={(e) => handleTagInputChange(e.target.value, setEditingTagValue)}
+                                  maxLength={MAX_TAG_LENGTH}
                                   onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                       e.preventDefault();
@@ -2107,7 +2270,8 @@ export const TaskDetailModal = ({
                                   <Input
                                     placeholder="Search or create tag…"
                                     value={tagSearch}
-                                    onChange={(e) => setTagSearch(e.target.value)}
+                                    onChange={(e) => handleTagInputChange(e.target.value, setTagSearch)}
+                                    maxLength={MAX_TAG_LENGTH}
                                     onKeyDown={(e) => {
                                       if (e.key === 'Enter') {
                                         e.preventDefault();
@@ -2120,23 +2284,46 @@ export const TaskDetailModal = ({
                                 </div>
                               </div>
 
-                              {availableTagSuggestions.length > 0 && (
-                                <div className="max-h-[180px] overflow-y-auto p-1">
-                                  {availableTagSuggestions
-                                    .filter(tag => !tagSearch.trim() || tag.toLowerCase().includes(tagSearch.toLowerCase()))
-                                    .map((tag) => (
-                                      <button
-                                        key={tag}
-                                        type="button"
-                                        className="w-full rounded px-2 py-1.5 text-left text-sm hover:bg-accent flex items-center gap-2"
-                                        onClick={() => addTag(tag)}
-                                      >
-                                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getTagColor(tag) }} />
-                                        {tag}
-                                      </button>
-                                    ))}
-                                </div>
-                              )}
+                              {/* cmdk's CommandList owns the scroll here — the plain
+                                  scrolling div this replaced sat inside the modal's
+                                  ScrollArea and lost the wheel to it, so the list
+                                  couldn't be scrolled the way the issue picker can. */}
+                              <Command shouldFilter={false}>
+                                <CommandList className="max-h-[180px] overflow-y-auto">
+                                  {/* Own empty state rather than CommandEmpty: filtering is
+                                      done here (shouldFilter={false}), so cmdk's own
+                                      empty detection never fires. */}
+                                  {availableTagSuggestions.filter(tag => !tagSearch.trim() || tag.toLowerCase().includes(tagSearch.toLowerCase())).length === 0 && (
+                                    <div className="py-3 text-center text-sm text-muted-foreground">
+                                      No matching tags.
+                                    </div>
+                                  )}
+                                  <CommandGroup>
+                                    {availableTagSuggestions
+                                      .filter(tag => !tagSearch.trim() || tag.toLowerCase().includes(tagSearch.toLowerCase()))
+                                      .map((tag) => (
+                                        <CommandItem
+                                          key={tag}
+                                          value={tag}
+                                          onSelect={() => addTag(tag)}
+                                          className="cursor-pointer flex items-center gap-2 group/tag"
+                                        >
+                                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: getTagColor(tag) }} />
+                                          <span className="flex-1 truncate">{tag}</span>
+                                          <button
+                                            type="button"
+                                            aria-label={`Delete tag ${tag}`}
+                                            title="Delete tag from this project"
+                                            className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus:opacity-100 group-hover/tag:opacity-100"
+                                            onClick={(e) => requestTagDelete(e, tag)}
+                                          >
+                                            <Trash2 className="h-3.5 w-3.5" />
+                                          </button>
+                                        </CommandItem>
+                                      ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
 
                               <div className="border-t p-1.5">
                                 <button
@@ -2176,7 +2363,7 @@ export const TaskDetailModal = ({
                     <Switch
                       id="task-advanced-mode"
                       checked={isAdvancedDescription}
-                      onCheckedChange={setIsAdvancedDescription}
+                      onCheckedChange={handleAdvancedDescriptionToggle}
                       disabled={!canEditTaskFields}
                       className={cn(showMobileHeader && 'disabled:opacity-100 disabled:cursor-pointer', showMobileHeader && !canEditTask && 'opacity-60')}
                     />
@@ -2194,11 +2381,11 @@ export const TaskDetailModal = ({
                       key={editedTask.id || 'create'}
                       readOnly={!canEditTaskFields}
                       initialBlocks={editedTask.descriptionBlocks}
-                      onChange={(blocks) => handleFieldChange('descriptionBlocks', blocks as any)}
+                      onChange={handleDescriptionBlocksChange}
                     />
                   </div>
                 ) : (
-                  <Textarea
+                  <LinkHighlightTextarea
                     value={editedTask.description || ''}
                     onChange={(e) => handleFieldChange('description', e.target.value)}
                     placeholder="Describe the task in detail..."
@@ -2349,13 +2536,23 @@ export const TaskDetailModal = ({
                   {attachments.map((attachment) => {
                     const FileIcon = getFileIcon(attachment.fileType);
                     const viewUrl = resolveFileUrl(attachment.url) ?? attachment.url;
+                    const isImage = attachment.fileType.startsWith('image/') && !failedThumbnails.has(attachment.id);
                     return (
                       <div
                         key={attachment.id}
                         className="flex items-center gap-3 p-2 rounded-lg bg-muted/50 group cursor-pointer hover:bg-muted"
                         onClick={() => setPreviewingFile({ url: viewUrl, fileName: attachment.filename, mimeType: attachment.fileType })}
                       >
-                        <FileIcon className="h-8 w-8 text-muted-foreground" />
+                        {isImage ? (
+                          <img
+                            src={viewUrl}
+                            alt={attachment.filename}
+                            className="h-8 w-8 rounded object-cover shrink-0 border"
+                            onError={() => setFailedThumbnails(prev => new Set(prev).add(attachment.id))}
+                          />
+                        ) : (
+                          <FileIcon className="h-8 w-8 text-muted-foreground shrink-0" />
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{attachment.filename}</p>
                           <p className="text-xs text-muted-foreground">
@@ -2398,23 +2595,42 @@ export const TaskDetailModal = ({
                   {/* Pending files (create mode only) */}
                   {mode === 'create' && pendingFiles.length > 0 && (
                     <div className="space-y-1">
-                      {pendingFiles.map((f, i) => (
-                        <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <File className="h-4 w-4 shrink-0 text-muted-foreground" />
-                            <span className="truncate">{f.name}</span>
-                            <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6 shrink-0"
-                            onClick={() => setPendingFiles(prev => prev.filter((_, idx) => idx !== i))}
+                      {pendingFiles.map((f, i) => {
+                        const previewUrl = pendingFileUrls[i];
+                        const isImage = f.type.startsWith('image/');
+                        return (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm cursor-pointer hover:bg-muted/50"
+                            onClick={() => setPreviewingFile({ url: previewUrl, fileName: f.name, mimeType: f.type })}
                           >
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      ))}
+                            <div className="flex items-center gap-2 min-w-0">
+                              {isImage && previewUrl ? (
+                                <img
+                                  src={previewUrl}
+                                  alt={f.name}
+                                  className="h-10 w-10 rounded object-cover shrink-0 border"
+                                />
+                              ) : (
+                                <File className="h-4 w-4 shrink-0 text-muted-foreground" />
+                              )}
+                              <span className="truncate">{f.name}</span>
+                              <span className="text-xs text-muted-foreground shrink-0">{formatFileSize(f.size)}</span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 shrink-0"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPendingFiles(prev => prev.filter((_, idx) => idx !== i));
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
 
@@ -2465,6 +2681,27 @@ export const TaskDetailModal = ({
                 </h3>
 
                 <div className="space-y-2">
+                  {!isMobileFieldsLocked && (
+                    <div className="flex gap-2">
+                      <Input
+                        placeholder="Paste video URL…"
+                        value={videoLinkInput}
+                        onChange={(e) => setVideoLinkInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
+                        className="text-sm"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleAddVideoLink}
+                        disabled={!videoLinkInput.trim()}
+                        className="shrink-0"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+
                   {videoLinks.map((vl) => {
                     const thumbnail = getVideoThumbnail(vl.url);
                     return (
@@ -2520,29 +2757,6 @@ export const TaskDetailModal = ({
                           </div>
                         </div>
                       ))}
-                    </div>
-                  )}
-
-                  {!isMobileFieldsLocked && (
-                    <div className="flex gap-2">
-                      <Input
-                        placeholder="Paste video URL…"
-                        value={videoLinkInput}
-                        onChange={(e) => setVideoLinkInput(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
-                        className="text-sm"
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleAddVideoLink}
-                        disabled={!videoLinkInput.trim()}
-                        className="shrink-0"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add
-                      </Button>
                     </div>
                   )}
                 </div>
@@ -2767,14 +2981,14 @@ export const TaskDetailModal = ({
                             {comment.author.initials}
                           </AvatarFallback>
                         </Avatar>
-                        <div className="flex-1 space-y-1">
+                        <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-medium">{comment.author.name}</span>
                             <span className="text-xs text-muted-foreground">
                               {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
                             </span>
                             {isOwnComment && !isEditingThisComment && (
-                              <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="ml-auto flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                   type="button"
                                   className="rounded p-0.5 text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
@@ -2786,7 +3000,7 @@ export const TaskDetailModal = ({
                                 <button
                                   type="button"
                                   className="rounded p-0.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
-                                  onClick={() => setDeletingCommentId(comment.id)}
+                                  onClick={() => handleDeleteComment(comment.id)}
                                   aria-label="Delete comment"
                                 >
                                   <Trash2 className="h-3 w-3" />
@@ -2818,7 +3032,7 @@ export const TaskDetailModal = ({
                               </div>
                             </div>
                           ) : (
-                            <p className="text-sm text-muted-foreground">{comment.content}</p>
+                            <p className="text-sm text-muted-foreground break-words">{comment.content}</p>
                           )}
                         </div>
                       </div>
@@ -2831,6 +3045,12 @@ export const TaskDetailModal = ({
                     placeholder="Add a comment..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                        e.preventDefault();
+                        handleAddComment();
+                      }
+                    }}
                     className="min-h-[80px]"
                   />
                   <Button className="h-auto" onClick={handleAddComment} disabled={!newComment.trim()}>
@@ -2856,7 +3076,7 @@ export const TaskDetailModal = ({
               <Button
                 className="w-full"
                 onClick={handleUpdateTask}
-                disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask}
+                disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask || !isFormDirty}
               >
                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Update Task
@@ -2890,8 +3110,8 @@ export const TaskDetailModal = ({
                 </Button>
                 <Button
                   onClick={handleUpdateTask}
-                  disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask}
-                  title={canEditTask ? undefined : editLockTitle}
+                  disabled={isSaving || !editedTask.title || !editedTask.dueDate || isBlockedWithoutDependencies || !canEditTask || !isFormDirty}
+                  title={canEditTask ? undefined : (isFormDirty ? editLockTitle : 'No changes to save')}
                 >
                   {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Update Task
@@ -2901,20 +3121,30 @@ export const TaskDetailModal = ({
           )}
         </DialogContent>
         <ConfirmationDialog
+          open={!!tagPendingDelete}
+          onOpenChange={(open) => { if (!open) setTagPendingDelete(null); }}
+          onConfirm={async () => {
+            if (!tagPendingDelete) return;
+            const { id, name } = tagPendingDelete;
+            setTagPendingDelete(null);
+            try {
+              await deleteTagMutation.mutateAsync(id);
+              toast.success(`Tag "${name}" deleted`);
+            } catch {
+              /* useDeleteTag surfaces the server message */
+            }
+          }}
+          title="Delete tag"
+          description={`"${tagPendingDelete?.name ?? ''}" isn't used by any task or issue. Deleting removes it from this project's tag list.`}
+          confirmText="Delete"
+          variant="destructive"
+        />
+        <ConfirmationDialog
           open={showDeleteConfirm}
           onOpenChange={setShowDeleteConfirm}
           onConfirm={handleDelete}
           title="Delete Task"
           description="Are you sure you want to delete this task? This action cannot be undone."
-          confirmText="Delete"
-          variant="destructive"
-        />
-        <ConfirmationDialog
-          open={!!deletingCommentId}
-          onOpenChange={(open) => !open && setDeletingCommentId(null)}
-          onConfirm={handleDeleteComment}
-          title="Delete Comment"
-          description="Are you sure you want to delete this comment? This action cannot be undone."
           confirmText="Delete"
           variant="destructive"
         />
@@ -2941,6 +3171,7 @@ export const TaskDetailModal = ({
         file={previewingFile}
         files={[
           ...attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType })),
+          ...pendingFiles.map((f, i) => ({ url: pendingFileUrls[i], fileName: f.name, mimeType: f.type })),
           ...videoLinks.map(v => ({ url: v.url, fileName: v.title || v.url })),
         ]}
         onClose={() => setPreviewingFile(null)}

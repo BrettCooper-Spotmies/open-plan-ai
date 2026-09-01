@@ -3,59 +3,61 @@ import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { tasksService } from '@/services/tasks.service';
-import { projectsService } from '@/services/projects.service';
+import { issuesService } from '@/services/issues.service';
 import { queryKeys } from '@/lib/queryClient';
 import { getDueDateStatus, isCompletedToday, isBlockingOthers, hasUnresolvedDependencies } from '@/features/myday/utils/myDayUtils';
 import type { MyDayItem, DueDateStatus } from '@/features/myday/utils/myDayUtils';
-import { useProjects } from './useProjects';
 import type { MyDayFilter } from '@/types';
 
 function matchesFilter(status: DueDateStatus, filter: MyDayFilter): boolean {
-  if (filter === 'all') return true;
+  if (filter === 'all' || filter === 'completed') return true;
   if (filter === 'today') return status === 'today';
   return status === 'overdue';
 }
 
+/** Local midnight today, as an ISO string — the cutoff for "done today". */
+function startOfTodayISO(): string {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
 /**
  * Shared raw fetch of tasks and issues assigned to the current user across all projects.
- * Tasks come from the dedicated /tasks/me/all endpoint (includes projectName).
- * Issues have no equivalent org-wide "assigned to me" endpoint with assignees
- * populated (the org-wide /organizations/:orgId/issues route is a raw, unjoined
- * select used only by Calendar), so they're fanned out per-project instead —
- * same pattern as issuesService.getOpenCount().
+ * Both come from dedicated org-wide "assigned to me" endpoints — /tasks/me/all and
+ * /issues/me/all — each a single request, not a per-project fan-out.
  *
- * Backs both useMyDayTasks and useCompletedTodayCount, so "completed today"
- * counting doesn't force completed items to linger in the displayed lists.
+ * Backs both useMyDayTasks and useCompletedTodayCount. By default the backend
+ * excludes done/resolved items except ones completed today (all that either
+ * consumer needs), instead of shipping the account's entire completed
+ * history on every My Day load. Pass `includeDone` only when the user has
+ * explicitly opened the Done/Resolved/Won't Fix column filter — that's a
+ * separate, on-demand query rather than the default page-load fetch.
  */
-function useMyDayRawData() {
+function useMyDayRawData(options?: { includeDone?: boolean }) {
   const { user } = useAuth();
   const { currentOrganization } = useOrganization();
   const orgId = currentOrganization?.id;
-  const { data: projects = [] } = useProjects();
+  const includeDone = options?.includeDone ?? false;
 
   const { data: rawTasks = [], isLoading: tasksLoading } = useQuery({
-    queryKey: [...queryKeys.myDay.all, 'tasks', user?.id, orgId],
-    queryFn: () => tasksService.getMyTasks(orgId),
+    queryKey: [...queryKeys.myDay.all, 'tasks', user?.id, orgId, includeDone],
+    queryFn: () => tasksService.getMyTasks(orgId, includeDone ? { includeDone: true } : { doneSince: startOfTodayISO() }),
     enabled: !!user?.id && !!orgId,
     staleTime: 30 * 1000,
   });
 
-  const projectIds = useMemo(() => projects.map(p => p.id).sort(), [projects]);
-
-  const { data: rawIssues = [], isLoading: issuesLoading } = useQuery({
-    queryKey: [...queryKeys.myDay.issues(user?.id || ''), projectIds],
-    queryFn: async () => {
-      const results = await Promise.all(
-        projects.map(async project => {
-          const issues = await projectsService.getIssues(project.id).catch(() => []);
-          return issues.map(issue => ({ issue, projectName: project.name }));
-        })
-      );
-      return results.flat();
-    },
-    enabled: !!user?.id && projects.length > 0,
+  const { data: rawIssuesList = [], isLoading: issuesLoading } = useQuery({
+    queryKey: [...queryKeys.myDay.issues(user?.id || ''), orgId, includeDone],
+    queryFn: () => issuesService.getMyIssues(orgId, includeDone ? { includeResolved: true } : { resolvedSince: startOfTodayISO() }),
+    enabled: !!user?.id && !!orgId,
     staleTime: 30 * 1000,
   });
+
+  const rawIssues = useMemo(
+    () => rawIssuesList.map((issue) => ({ issue, projectName: issue.projectName, projectCode: issue.projectCode })),
+    [rawIssuesList],
+  );
 
   return { user, rawTasks, rawIssues, isLoading: tasksLoading || issuesLoading };
 }
@@ -71,10 +73,15 @@ function useMyDayRawData() {
  * so the filter can actually surface it instead of being silently dead.
  */
 export function useMyDayTasks(filter: MyDayFilter = 'all', statusFilter?: string[]) {
-  const { user, rawTasks, rawIssues, isLoading } = useMyDayRawData();
   const includeWontFix = statusFilter?.includes('wont-fix') ?? false;
   const includeResolved = statusFilter?.includes('resolved') ?? false;
   const includeDone = statusFilter?.includes('done') ?? false;
+  const isCompletedTab = filter === 'completed';
+  // Any of these selected means the full done/resolved/wont-fix history is
+  // actually needed, not just today's — fetch it on demand for this case only.
+  const { user, rawTasks, rawIssues, isLoading } = useMyDayRawData({
+    includeDone: includeDone || includeResolved || includeWontFix || isCompletedTab,
+  });
 
   const data = useMemo((): MyDayItem[] => {
     if (!user?.id) return [];
@@ -84,11 +91,13 @@ export function useMyDayTasks(filter: MyDayFilter = 'all', statusFilter?: string
     // disappears from the list immediately, unless the user explicitly filters for "Done".
     const taskItems: MyDayItem[] = rawTasks
       .filter(task =>
-        matchesFilter(getDueDateStatus(task.dueDate), filter) &&
-        (task.status !== 'done' || includeDone)
+        isCompletedTab
+          ? task.status === 'done'
+          : matchesFilter(getDueDateStatus(task.dueDate, task.startDate), filter) &&
+            (task.status !== 'done' || includeDone)
       )
       .map(task => {
-        const dueDateStatus = getDueDateStatus(task.dueDate);
+        const dueDateStatus = getDueDateStatus(task.dueDate, task.startDate);
         return {
           id: task.id,
           itemType: 'task' as const,
@@ -101,6 +110,8 @@ export function useMyDayTasks(filter: MyDayFilter = 'all', statusFilter?: string
           projectId: task.projectId || '',
           // A task with no projectId is a personal "My Tasks" item (not tied to a project).
           projectName: (task as any).projectName || (task.projectId ? '' : 'Personal'),
+          projectCode: (task as any).projectCode ?? undefined,
+          number: task.number,
           isOverdue: dueDateStatus === 'overdue',
           isDueToday: dueDateStatus === 'today',
           isBlocked: task.status === 'blocked' || (task.blockedBy?.length ?? 0) > 0,
@@ -116,12 +127,13 @@ export function useMyDayTasks(filter: MyDayFilter = 'all', statusFilter?: string
     const issueItems: MyDayItem[] = rawIssues
       .filter(({ issue }) => {
         const isAssignedToUser = issue.assignees?.some(a => a.id === user.id) ?? false;
+        if (!isAssignedToUser) return false;
+        if (isCompletedTab) return issue.status === 'resolved' || issue.status === 'wont-fix';
         if (issue.status === 'wont-fix' && !includeWontFix) return false;
         if (issue.status === 'resolved' && !includeResolved) return false;
-        return isAssignedToUser &&
-          matchesFilter(getDueDateStatus(issue.dueDate), filter);
+        return matchesFilter(getDueDateStatus(issue.dueDate), filter);
       })
-      .map(({ issue, projectName }) => {
+      .map(({ issue, projectName, projectCode }) => {
         const dueDateStatus = getDueDateStatus(issue.dueDate);
         return {
           id: issue.id,
@@ -134,6 +146,8 @@ export function useMyDayTasks(filter: MyDayFilter = 'all', statusFilter?: string
           dueDate: issue.dueDate,
           projectId: issue.projectId,
           projectName,
+          projectCode: projectCode ?? undefined,
+          number: issue.number,
           isOverdue: dueDateStatus === 'overdue',
           isDueToday: dueDateStatus === 'today',
           isBlocked: false,

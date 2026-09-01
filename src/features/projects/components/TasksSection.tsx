@@ -15,8 +15,22 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useProjectTaskColumns } from '@/hooks/useProjectTaskColumns';
 import { buildTaskStatusOptions } from '../utils/taskStatusOptions';
 
+function toDayString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function matchesCustomDateRange(date: Date | null, from: string | undefined, to: string | undefined): boolean {
+  if (!date || !from) return false;
+  const day = toDayString(date);
+  return day >= from && day <= (to || from);
+}
+
 interface TasksSectionProps {
   projectId: string;
+  projectCode?: string;
   tasks: Task[];
   allTasks?: Task[];
   milestones: Milestone[];
@@ -105,6 +119,7 @@ export function ViewControls({
 
 export function TasksSection({
   projectId,
+  projectCode,
   tasks,
   allTasks,
   milestones,
@@ -153,6 +168,8 @@ export function TasksSection({
     if (filters.milestoneId) count++;
     if (filters.dueDate) count++;
     if (filters.dueDateCustom) count++;
+    if (filters.completedDate) count++;
+    if (filters.completedDateCustom) count++;
     if (filters.tags?.length) count++;
     if (filters.hasBlockers) count++;
     return count;
@@ -240,10 +257,10 @@ export function TasksSection({
         }
       }
 
-      // Exact due date filter (calendar-picked, takes precedence over preset)
+      // Custom due date range filter (calendar-picked, takes precedence over preset)
       if (filters.dueDateCustom) {
         const taskDueDate = task.dueDate ? new Date(task.dueDate) : null;
-        if (!taskDueDate || taskDueDate.toDateString() !== new Date(filters.dueDateCustom).toDateString()) {
+        if (!matchesCustomDateRange(taskDueDate, filters.dueDateCustom, filters.dueDateCustomTo)) {
           return false;
         }
       } else if (filters.dueDate) {
@@ -272,6 +289,37 @@ export function TasksSection({
           case 'no-date':
             if (taskDueDate) return false;
             break;
+        }
+      }
+
+      // Custom completion date range filter (calendar-picked, takes precedence over preset)
+      if (filters.completedDateCustom) {
+        const taskCompletedDate = task.completedAt ? new Date(task.completedAt) : null;
+        if (!matchesCustomDateRange(taskCompletedDate, filters.completedDateCustom, filters.completedDateCustomTo)) {
+          return false;
+        }
+      } else if (filters.completedDate) {
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayEnd = new Date();
+        todayEnd.setHours(23, 59, 59, 999);
+        const taskCompletedDate = task.completedAt ? new Date(task.completedAt) : null;
+
+        switch (filters.completedDate) {
+          case 'today':
+            if (!taskCompletedDate || taskCompletedDate.toDateString() !== todayStart.toDateString()) return false;
+            break;
+          case 'this-week': {
+            const weekStart = new Date(todayStart);
+            weekStart.setDate(todayStart.getDate() - 7);
+            if (!taskCompletedDate || taskCompletedDate < weekStart || taskCompletedDate > todayEnd) return false;
+            break;
+          }
+          case 'this-month': {
+            const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+            if (!taskCompletedDate || taskCompletedDate < monthStart || taskCompletedDate > todayEnd) return false;
+            break;
+          }
         }
       }
 
@@ -347,6 +395,7 @@ export function TasksSection({
         {isMobile ? (
           <MobileTaskListView
             projectId={projectId}
+            projectCode={projectCode}
             tasks={filteredTasks}
             allTasks={dependencyTasks}
             modules={modules}
@@ -361,6 +410,7 @@ export function TasksSection({
         ) : viewMode === 'kanban' ? (
           <KanbanView
             projectId={projectId}
+            projectCode={projectCode}
             tasks={filteredTasks}
             allTasks={dependencyTasks}
             issues={issues}
@@ -377,6 +427,7 @@ export function TasksSection({
         ) : (
           <ListView
             projectId={projectId}
+            projectCode={projectCode}
             tasks={filteredTasks}
             allTasks={dependencyTasks}
             milestones={milestones}

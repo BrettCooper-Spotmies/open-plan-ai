@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Flag, AlertTriangle, Users, Calendar, CalendarIcon, Search, X, Plus, Filter, User, Clock, LayoutGrid, List, Loader2, MessageCircle, Trash2, Upload, Download, Tag } from 'lucide-react';
+import { Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, LayoutGrid, List, Loader2, MessageCircle, Trash2, Upload, Download, Tag, ChevronDown, FolderOpen } from 'lucide-react';
 import { BOMView } from './components/BOMView';
 import RequirementsView from './components/RequirementsView';
 import { ECOView } from './components/ECOView';
@@ -8,6 +8,7 @@ import { GateView } from './components/GateView';
 import { RiskView } from './components/RiskView';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 
 import { Label } from '@/components/ui/label';
@@ -26,19 +27,15 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
 import { TasksSection, ViewControls } from './components/TasksSection';
+import { ImportTasksDialog } from '../task-import/ImportTasksDialog';
+import { ImportIssuesDialog } from '../issue-import/ImportIssuesDialog';
 import { ModulesSection, ModuleViewControls } from './components/ModulesSection';
 import { MilestonesView } from './components/MilestonesView';
 import { IssuesView } from './components/IssuesView';
 import { SupportLinksSheet } from './components/SupportLinksSheet';
+import { useFeatureTogglesStore } from '@/stores/useFeatureTogglesStore';
 import { ProjectDetailSkeleton } from './components/ProjectDetailSkeleton';
 import { ProjectProgressPopover } from './components/ProjectProgressPopover';
 import { AddModuleDialog } from './components/AddModuleDialog';
@@ -77,13 +74,13 @@ import {
   useBatchUpdateTasks,
   useBatchUpdateModules,
 } from '@/hooks/useProjectMutations';
-import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/queryClient';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { projectMembersService } from '@/services/projectMembers.service';
 import { attachmentsService } from '@/services/attachments.service';
+import { commentsService } from '@/services/comments.service';
 import { chatService } from '@/services/chat.service';
 import { ProjectChatPanel } from './components/ProjectChatPanel';
 import { toast } from 'sonner';
@@ -101,9 +98,14 @@ interface IssueFilter {
   assignedById?: string[];
   updatedById?: string[];
   dueDate?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
-  dueDateCustom?: string; // exact date (yyyy-MM-dd) picked from the calendar, overrides dueDate preset
+  dueDateCustom?: string; // start of a custom range (yyyy-MM-dd) picked from the calendar, overrides dueDate preset
+  dueDateCustomTo?: string; // end of the custom range (yyyy-MM-dd), inclusive; same as dueDateCustom for a single-day pick
   reportedDate?: 'today' | 'this-week' | 'this-month';
-  reportedDateCustom?: string; // exact date (yyyy-MM-dd) picked from the calendar, overrides reportedDate preset
+  reportedDateCustom?: string; // start of a custom range (yyyy-MM-dd) picked from the calendar, overrides reportedDate preset
+  reportedDateCustomTo?: string; // end of the custom range (yyyy-MM-dd), inclusive; same as reportedDateCustom for a single-day pick
+  completedDate?: 'today' | 'this-week' | 'this-month';
+  completedDateCustom?: string; // start of a custom range (yyyy-MM-dd) picked from the calendar, overrides completedDate preset
+  completedDateCustomTo?: string; // end of the custom range (yyyy-MM-dd), inclusive; same as completedDateCustom for a single-day pick
   tags?: string[];
 }
 
@@ -156,7 +158,161 @@ function MilestoneViewControls({
   );
 }
 
+const BASE_DATE_OPTIONS = [
+  { value: 'today', label: 'Today' },
+  { value: 'this-week', label: 'This Week' },
+  { value: 'this-month', label: 'This Month' },
+];
+
 // Issue View Controls Component — view toggle + filter only (search is in parent)
+function DateFilterSelect({
+  label,
+  preset,
+  custom,
+  customTo,
+  extraOptions = [],
+  onChange,
+}: {
+  label: string;
+  preset?: string;
+  custom?: string; // start of a custom range (yyyy-MM-dd); same as customTo for a single-day pick
+  customTo?: string; // end of a custom range (yyyy-MM-dd), inclusive
+  extraOptions?: { value: string; label: string }[];
+  onChange: (value: { preset?: string; custom?: string; customTo?: string }) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  // Draft range while the calendar is open — only committed to the actual
+  // filter (via onChange) once the user hits Apply, so a single click (which
+  // react-day-picker's range mode reports as from===to) doesn't immediately
+  // close the dialog before a second date can be picked.
+  const [draftRange, setDraftRange] = useState<{ from?: Date; to?: Date }>({});
+  const allOptions = [...extraOptions, ...BASE_DATE_OPTIONS];
+  const isRange = !!custom && !!customTo && custom !== customTo;
+  const displayLabel = custom
+    ? (isRange ? `${format(new Date(custom), 'PP')} – ${format(new Date(customTo!), 'PP')}` : format(new Date(custom), 'PPP'))
+    : (allOptions.find((o) => o.value === preset)?.label ?? 'Any Date');
+
+  const openCalendar = () => {
+    setOpen(false);
+    setDraftRange({
+      from: custom ? new Date(custom) : undefined,
+      to: customTo ? new Date(customTo) : undefined,
+    });
+    setCalendarOpen(true);
+  };
+
+  const applyRange = () => {
+    if (!draftRange.from) return;
+    const from = format(draftRange.from, 'yyyy-MM-dd');
+    const to = format(draftRange.to ?? draftRange.from, 'yyyy-MM-dd');
+    onChange({ preset: undefined, custom: from, customTo: to });
+    setCalendarOpen(false);
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label className="text-xs flex items-center gap-1">
+        <Clock className="h-3 w-3" />
+        {label}
+      </Label>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-8 w-full justify-between font-normal"
+          >
+            <span className="truncate">{displayLabel}</span>
+            <ChevronDown className="h-3.5 w-3.5 opacity-50 shrink-0" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-1" align="end" sideOffset={4}>
+          <div className="flex flex-col">
+            <button
+              type="button"
+              className="w-full text-left px-2.5 py-1.5 text-sm rounded-sm hover:bg-accent"
+              onClick={() => { onChange({ preset: undefined, custom: undefined, customTo: undefined }); setOpen(false); }}
+            >
+              Any Date
+            </button>
+            {allOptions.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className="w-full text-left px-2.5 py-1.5 text-sm rounded-sm hover:bg-accent"
+                onClick={() => { onChange({ preset: opt.value, custom: undefined, customTo: undefined }); setOpen(false); }}
+              >
+                {opt.label}
+              </button>
+            ))}
+            <button
+              type="button"
+              className="w-full text-left px-2.5 py-1.5 text-sm rounded-sm hover:bg-accent"
+              onClick={openCalendar}
+            >
+              Custom...
+            </button>
+          </div>
+        </PopoverContent>
+      </Popover>
+      <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+        <DialogContent
+          className="w-auto max-w-fit p-4"
+          onPointerDownOutside={() => { }}
+          onInteractOutside={() => { }}
+        >
+          <DialogHeader>
+            <DialogTitle className="text-sm">{label}</DialogTitle>
+          </DialogHeader>
+          <CalendarPicker
+            mode="range"
+            selected={draftRange}
+            onSelect={(range) => setDraftRange(range ?? {})}
+          />
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 text-xs whitespace-nowrap">
+              <span>
+                <span className="text-muted-foreground">From </span>
+                <span className="font-medium">{draftRange.from ? format(draftRange.from, 'PP') : '—'}</span>
+              </span>
+              <span>
+                <span className="text-muted-foreground">To </span>
+                <span className="font-medium">
+                  {draftRange.to ? format(draftRange.to, 'PP') : (draftRange.from ? format(draftRange.from, 'PP') : '—')}
+                </span>
+              </span>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="h-7 px-3 text-xs shrink-0"
+              disabled={!draftRange.from}
+              onClick={applyRange}
+            >
+              Apply
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+      {custom && (
+        <div className="flex items-center justify-between pl-1">
+          <span className="text-xs text-muted-foreground">{displayLabel}</span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-5 px-1.5 text-xs"
+            onClick={() => onChange({ preset: undefined, custom: undefined, customTo: undefined })}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function IssueViewControls({
   viewMode,
   onViewModeChange,
@@ -181,8 +337,8 @@ function IssueViewControls({
   const [filterOpen, setFilterOpen] = useState(false);
   return (
     <div className="flex items-center gap-2">
-      {/* View Toggle */}
-      <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
+      {/* View Toggle (kanban/table has no distinct mobile layout — hidden below md) */}
+      <div className="hidden md:flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
         <Button
           variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
           size="sm"
@@ -206,7 +362,7 @@ function IssueViewControls({
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="gap-2 h-9 rounded-lg">
             <Filter className="h-4 w-4" />
-            Filter
+            <span className="hidden md:inline">Filter</span>
             {activeFilterCount > 0 && (
               <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
                 {activeFilterCount}
@@ -214,25 +370,27 @@ function IssueViewControls({
             )}
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-72" align="end">
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h4 className="font-medium text-sm">Filter Issues</h4>
-              {activeFilterCount > 0 && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    onClearFilters();
-                    setFilterOpen(false);
-                  }}
-                  className="h-6 px-2 text-xs"
-                >
-                  Clear all
-                </Button>
-              )}
-            </div>
-
+        <PopoverContent
+          className="w-72 p-0 flex flex-col overflow-hidden max-h-[var(--radix-popover-content-available-height)]"
+          align="end"
+        >
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
+            <h4 className="font-medium text-sm">Filter Issues</h4>
+            {activeFilterCount > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  onClearFilters();
+                  setFilterOpen(false);
+                }}
+                className="h-6 px-2 text-xs"
+              >
+                Clear all
+              </Button>
+            )}
+          </div>
+          <div className="space-y-4 p-4 overflow-y-auto min-h-0">
             {/* Status Filter */}
             <div className="space-y-2">
               <Label className="text-xs flex items-center gap-1">
@@ -328,136 +486,50 @@ function IssueViewControls({
             )}
 
             {/* Due Date Filter */}
-            <div className="space-y-2">
-              <Label className="text-xs flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Due Date
-              </Label>
-              <div className="flex items-center gap-1">
-                <Select
-                  value={filters.dueDate ?? 'all'}
-                  onValueChange={(v) => onFiltersChange({
-                    ...filters,
-                    dueDate: v === 'all' ? undefined : v as IssueFilter['dueDate'],
-                    dueDateCustom: undefined,
-                  })}
-                >
-                  <SelectTrigger className="h-8 flex-1">
-                    <SelectValue placeholder="Any Date" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Any Date</SelectItem>
-                    <SelectItem value="overdue">Overdue</SelectItem>
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="this-week">This Week</SelectItem>
-                    <SelectItem value="this-month">This Month</SelectItem>
-                    <SelectItem value="no-date">No Date</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant={filters.dueDateCustom ? 'secondary' : 'outline'}
-                      size="icon"
-                      className="h-8 w-8 shrink-0"
-                    >
-                      <CalendarIcon className="h-3.5 w-3.5" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="end">
-                    <CalendarPicker
-                      mode="single"
-                      selected={filters.dueDateCustom ? new Date(filters.dueDateCustom) : undefined}
-                      onSelect={(date) => onFiltersChange({
-                        ...filters,
-                        dueDateCustom: date ? format(date, 'yyyy-MM-dd') : undefined,
-                        dueDate: date ? undefined : filters.dueDate,
-                      })}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              {filters.dueDateCustom && (
-                <div className="flex items-center justify-between pl-1">
-                  <span className="text-xs text-muted-foreground">{format(new Date(filters.dueDateCustom), 'PPP')}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 px-1.5 text-xs"
-                    onClick={() => onFiltersChange({ ...filters, dueDateCustom: undefined })}
-                  >
-                    Clear
-                  </Button>
-                </div>
-              )}
-            </div>
+            <DateFilterSelect
+              label="Due Date"
+              preset={filters.dueDate}
+              custom={filters.dueDateCustom}
+              customTo={filters.dueDateCustomTo}
+              extraOptions={[
+                { value: 'overdue', label: 'Overdue' },
+                { value: 'no-date', label: 'No Date' },
+              ]}
+              onChange={({ preset, custom, customTo }) => onFiltersChange({
+                ...filters,
+                dueDate: preset as IssueFilter['dueDate'],
+                dueDateCustom: custom,
+                dueDateCustomTo: customTo,
+              })}
+            />
 
             {/* Reported Date Filter */}
-            <div className="space-y-2">
-              <Label className="text-xs flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Reported Date
-              </Label>
-              <div className="flex items-center gap-1">
-                <Select
-                  value={filters.reportedDate ?? 'all'}
-                  onValueChange={(v) => onFiltersChange({
-                    ...filters,
-                    reportedDate: v === 'all' ? undefined : v as IssueFilter['reportedDate'],
-                    reportedDateCustom: undefined,
-                  })}
-                >
-                  <SelectTrigger className="h-8 flex-1">
-                    <SelectValue placeholder="Any Date" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Any Date</SelectItem>
-                    <SelectItem value="today">Today</SelectItem>
-                    <SelectItem value="this-week">This Week</SelectItem>
-                    <SelectItem value="this-month">This Month</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant={filters.reportedDateCustom ? 'secondary' : 'outline'}
-                      size="icon"
-                      className="h-8 w-8 shrink-0"
-                    >
-                      <CalendarIcon className="h-3.5 w-3.5" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="end">
-                    <CalendarPicker
-                      mode="single"
-                      selected={filters.reportedDateCustom ? new Date(filters.reportedDateCustom) : undefined}
-                      onSelect={(date) => onFiltersChange({
-                        ...filters,
-                        reportedDateCustom: date ? format(date, 'yyyy-MM-dd') : undefined,
-                        reportedDate: date ? undefined : filters.reportedDate,
-                      })}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              {filters.reportedDateCustom && (
-                <div className="flex items-center justify-between pl-1">
-                  <span className="text-xs text-muted-foreground">{format(new Date(filters.reportedDateCustom), 'PPP')}</span>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="h-5 px-1.5 text-xs"
-                    onClick={() => onFiltersChange({ ...filters, reportedDateCustom: undefined })}
-                  >
-                    Clear
-                  </Button>
-                </div>
-              )}
-            </div>
+            <DateFilterSelect
+              label="Reported Date"
+              preset={filters.reportedDate}
+              custom={filters.reportedDateCustom}
+              customTo={filters.reportedDateCustomTo}
+              onChange={({ preset, custom, customTo }) => onFiltersChange({
+                ...filters,
+                reportedDate: preset as IssueFilter['reportedDate'],
+                reportedDateCustom: custom,
+                reportedDateCustomTo: customTo,
+              })}
+            />
+
+            {/* Completion Date Filter */}
+            <DateFilterSelect
+              label="Completion Date"
+              preset={filters.completedDate}
+              custom={filters.completedDateCustom}
+              customTo={filters.completedDateCustomTo}
+              onChange={({ preset, custom, customTo }) => onFiltersChange({
+                ...filters,
+                completedDate: preset as IssueFilter['completedDate'],
+                completedDateCustom: custom,
+                completedDateCustomTo: customTo,
+              })}
+            />
           </div>
         </PopoverContent>
       </Popover>
@@ -471,10 +543,7 @@ export default function ProjectDetail() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { id, tab: tabParam, partId, ecoId, taskId, moduleId, milestoneId, issueId } = useParams();
-  const { data: boardColumns } = useProjectTaskColumns(id);
-  const filterStatusOptions = useMemo(() => buildTaskStatusOptions(boardColumns), [boardColumns]);
-  const { data: apiIssueColumns } = useIssueColumns(id);
-  const issueColumns = apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS;
+  const isSupportFeatureEnabled = useFeatureTogglesStore((s) => s.enabled.support);
 
   // The /bom/:partId, /eng-changes/:ecoId, /tasks/:taskId, /modules/:moduleId,
   // /milestones/:milestoneId, and /issues/:issueId routes encode the section as a
@@ -497,6 +566,14 @@ export default function ProjectDetail() {
                 ? (tabParam as ProjectSection)
                 : 'bom';
 
+  // Board column definitions are only rendered on their own tab (Tasks status
+  // filter / Issues status filter) — gating avoids fetching them on every tab
+  // load (BOM, Modules, ECO, ...) when nothing on screen uses them yet.
+  const { data: boardColumns } = useProjectTaskColumns(id, { enabled: section === 'tasks' });
+  const filterStatusOptions = useMemo(() => buildTaskStatusOptions(boardColumns), [boardColumns]);
+  const { data: apiIssueColumns } = useIssueColumns(id, { enabled: section === 'issues' });
+  const issueColumns = apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS;
+
   const isMobile = useIsMobile();
   const [viewModeStr, setViewModeStr] = useState<TaskViewMode | null>(null);
   const [moduleViewModeStr, setModuleViewModeStr] = useState<ModuleViewMode | null>(null);
@@ -505,9 +582,31 @@ export default function ProjectDetail() {
   const [ecoNewOpen, setEcoNewOpen] = useState(false);
   const [milestoneViewModeStr, setMilestoneViewModeStr] = useState<'list' | 'kanban' | null>(null);
 
+  // Height of the sticky tabs/search header block, so views below it (like the
+  // Issues table) can stick their own header just underneath it instead of at top:0.
+  // A callback ref (not useRef + useEffect([])) because this component early-returns
+  // a skeleton while `isLoading` — the real header div doesn't exist yet on first
+  // mount, so an effect with an empty dep array would observe `null` and never re-run
+  // once the div actually appears.
+  const [stickyHeaderEl, setStickyHeaderEl] = useState<HTMLDivElement | null>(null);
+  const [stickyHeaderHeight, setStickyHeaderHeight] = useState(0);
+  useEffect(() => {
+    const el = stickyHeaderEl;
+    if (!el) return;
+    const observer = new ResizeObserver((entries) => {
+      // Use the border-box height (not contentRect, which excludes the header's
+      // bottom border) so the table header below sticks flush with no gap.
+      const borderBoxSize = entries[0].borderBoxSize?.[0];
+      setStickyHeaderHeight(borderBoxSize ? borderBoxSize.blockSize : entries[0].target.getBoundingClientRect().height);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [stickyHeaderEl]);
+
   const viewMode = viewModeStr || (isMobile ? 'list' : 'kanban');
   const moduleViewMode = moduleViewModeStr || (isMobile ? 'list' : 'kanban');
-  const issueViewMode = issueViewModeStr || (isMobile ? 'table' : 'kanban');
+  // Mobile has no kanban/table toggle — it always uses the grouped card list.
+  const issueViewMode = isMobile ? 'table' : (issueViewModeStr || 'kanban');
   const milestoneViewMode = milestoneViewModeStr || (isMobile ? 'list' : 'kanban');
 
   const setViewMode = (val: TaskViewMode) => setViewModeStr(val);
@@ -557,6 +656,8 @@ export default function ProjectDetail() {
   const [isAddMilestoneDialogOpen, setIsAddMilestoneDialogOpen] = useState(false);
   const [isAddIssueDialogOpen, setIsAddIssueDialogOpen] = useState(false);
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
+  const [isImportTasksDialogOpen, setIsImportTasksDialogOpen] = useState(false);
+  const [isImportIssuesDialogOpen, setIsImportIssuesDialogOpen] = useState(false);
   const [selectedMemberToAdd, setSelectedMemberToAdd] = useState('');
   const [selectedMemberRoleToAdd, setSelectedMemberRoleToAdd] = useState<ProjectRole>('member');
   const [isAddingProjectMember, setIsAddingProjectMember] = useState(false);
@@ -778,6 +879,8 @@ export default function ProjectDetail() {
     if (issueFilters.dueDateCustom !== undefined) count++;
     if (issueFilters.reportedDate !== undefined) count++;
     if (issueFilters.reportedDateCustom !== undefined) count++;
+    if (issueFilters.completedDate !== undefined) count++;
+    if (issueFilters.completedDateCustom !== undefined) count++;
     if (issueFilters.tags?.length) count++;
     return count;
   }, [issueFilters]);
@@ -1072,6 +1175,22 @@ export default function ProjectDetail() {
         toast.warning('Issue created but some attachments failed to upload');
       }
     }
+
+    if (newIssuePartial.comments && newIssuePartial.comments.length > 0 && created?.id) {
+      try {
+        await Promise.all(
+          newIssuePartial.comments.map(comment =>
+            commentsService.create({
+              content: comment.content,
+              entity_id: created.id,
+              entity_type: 'issue',
+            })
+          )
+        );
+      } catch {
+        toast.warning('Issue created but some comments failed to save');
+      }
+    }
   };
 
   const handleIssueUpdate = (updatedIssue: Issue) => {
@@ -1132,6 +1251,7 @@ export default function ProjectDetail() {
         due_date: newMilestonePartial.date || null,
         description: newMilestonePartial.description || null,
         status: newMilestonePartial.completed ? 'completed' : 'upcoming',
+        assignee_id: newMilestonePartial.assignee?.id || null,
       });
 
       // Link tasks if any were selected during creation
@@ -1176,6 +1296,7 @@ export default function ProjectDetail() {
         due_date: updatedMilestone.date || null,
         description: updatedMilestone.description || null,
         status: updatedMilestone.completed ? undefined : (updatedMilestone.status || null),
+        assignee_id: updatedMilestone.assignee?.id || null,
       },
     });
 
@@ -1245,6 +1366,22 @@ export default function ProjectDetail() {
         toast.warning('Task created but some attachments failed to upload');
       }
     }
+
+    if (newTask.comments && newTask.comments.length > 0 && created?.id) {
+      try {
+        await Promise.all(
+          newTask.comments.map(comment =>
+            commentsService.create({
+              content: comment.content,
+              entity_id: created.id,
+              entity_type: 'task',
+            })
+          )
+        );
+      } catch {
+        toast.warning('Task created but some comments failed to save');
+      }
+    }
   };
 
   const handleTaskUpdate = async (updatedTask: Task, onError?: () => void) => {
@@ -1307,9 +1444,10 @@ export default function ProjectDetail() {
 
   const openIssuesCount = project.issues?.filter(i => i.status !== 'resolved' && i.status !== 'wont-fix').length || 0;
   const criticalIssuesCount = project.issues?.filter(i => i.severity === 'critical' && i.status !== 'resolved' && i.status !== 'wont-fix').length || 0;
+  const openTasksCount = project.tasks?.filter(t => t.status !== 'done').length || 0;
 
   const tabBadges: Partial<Record<ProjectTabId, { count: number; variant: 'secondary' | 'destructive' }>> = {
-    tasks: { count: (project.tasks || []).length, variant: 'secondary' },
+    tasks: { count: openTasksCount, variant: 'secondary' },
     modules: { count: modules.length, variant: 'secondary' },
     milestones: { count: (project.milestones || []).length, variant: 'secondary' },
     ...(openIssuesCount > 0
@@ -1323,343 +1461,396 @@ export default function ProjectDetail() {
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-6 animate-fade-in w-full min-w-0">
+      <div className="grid grid-cols-1 gap-6 w-full min-w-0">
 
         {/* Section Tabs - Entity-based navigation */}
         <Tabs value={section} onValueChange={(v) => navigate(`/projects/${id}/${v}`)} className="w-full">
-          <div className="sticky top-0 z-20 bg-background">
+          {/* Nothing inside this bar renders once a part/ECO detail or mobile module
+              detail is open (both conditional blocks below check the same three
+              flags) — so gate the sticky wrapper itself too. Otherwise it still
+              occupies its padding+border as an empty strip pinned at top:0,
+              overlapping whatever scrolls underneath it (e.g. BOMDetailScreen's
+              own header, which scrolls in its own inner container). */}
           {!partId && !ecoId && !isMobileModuleDetailOpen && (
-            <div className="flex flex-row md:items-center justify-between gap-2 w-full pb-1">
-              {/* Left Side: Tabs */}
-              <div className="flex-1 md:flex-none w-full md:w-auto py-1 min-w-0 md:mr-auto overflow-x-auto hide-scrollbar">
-                <TabsList
-                  className={`bg-muted/50 grid ${TAB_GRID_COLS_CLASS[visibleTabs.length] || 'grid-cols-6'} min-w-[300px] md:min-w-0 w-full h-11 md:w-auto md:flex md:shrink-0`}
-                >
-                  {visibleTabs.map(({ id: tabId, label, title, icon: Icon }) => {
-                    const badge = tabBadges[tabId];
-                    return (
-                      <TabsTrigger
-                        key={tabId}
-                        value={tabId}
-                        className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
-                        title={title}
-                        onTouchStart={() => handleTabLongPressStart(tabId)}
-                        onTouchEnd={handleTabLongPressEnd}
-                        onTouchCancel={handleTabLongPressEnd}
-                        onTouchMove={handleTabLongPressEnd}
-                      >
-                        <Icon className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
-                        {!isMobile && <span className="truncate">{label}</span>}
-                        {!isMobile && badge && (
-                          <Badge variant={badge.variant} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
-                            {badge.count}
-                          </Badge>
-                        )}
-                        {isMobile && longPressedTab === tabId && (
-                          <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
-                            {label}
-                          </span>
-                        )}
-                      </TabsTrigger>
-                    );
-                  })}
-                </TabsList>
-              </div>
-
-              {/* Right Side: Team + Chat + Add Button */}
-              <div className="flex items-center gap-2 shrink-0 justify-end md:w-auto">
-                {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
-                {/* Start Chat */}
-                <Button
-                  type="button"
-                  variant={isChatPanelOpen ? 'secondary' : 'outline'}
-                  size="sm"
-                  className="h-9 gap-1.5 whitespace-nowrap rounded-lg hidden sm:flex"
-                  onClick={handleStartProjectChat}
-                  disabled={isStartingChat || !canStartProjectChat}
-                >
-                  {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
-                  <span className="hidden md:inline">Chat</span>
-                </Button>
-                {/* Team Popover */}
-                <div className="hidden md:block">
-                  <ProjectTeamButton projectId={id!} />
+          <div ref={setStickyHeaderEl} className="sticky top-0 z-20 bg-background -mx-4 px-4 pt-2.5 pb-2.5 border-b md:pt-0 md:mx-0 md:px-0 md:pb-2.5 will-change-transform">
+            {!partId && !ecoId && !isMobileModuleDetailOpen && (
+              <div className="flex flex-row md:items-center justify-between gap-2 w-full pb-1">
+                {/* Left Side: Tabs */}
+                <div className="flex-1 md:flex-none w-full md:w-auto py-1 min-w-0 md:mr-auto overflow-x-auto hide-scrollbar">
+                  <TabsList
+                    className={`bg-muted/50 grid ${TAB_GRID_COLS_CLASS[visibleTabs.length] || 'grid-cols-6'} min-w-[300px] md:min-w-0 w-full h-11 md:w-auto md:flex md:shrink-0`}
+                  >
+                    {visibleTabs.map(({ id: tabId, label, title, icon: Icon }) => {
+                      const badge = tabBadges[tabId];
+                      return (
+                        <TabsTrigger
+                          key={tabId}
+                          value={tabId}
+                          className="relative gap-1 sm:gap-2 px-2 justify-center min-w-0"
+                          title={title}
+                          onTouchStart={() => handleTabLongPressStart(tabId)}
+                          onTouchEnd={handleTabLongPressEnd}
+                          onTouchCancel={handleTabLongPressEnd}
+                          onTouchMove={handleTabLongPressEnd}
+                        >
+                          <Icon className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
+                          {!isMobile && <span className="truncate">{label}</span>}
+                          {!isMobile && badge && (
+                            <Badge variant={badge.variant} className="ml-1 h-5 px-1.5 text-[10px] shrink-0">
+                              {badge.count}
+                            </Badge>
+                          )}
+                          {isMobile && longPressedTab === tabId && (
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 mt-1 z-50 whitespace-nowrap rounded-md border border-border bg-popover px-2 py-1 text-[10px] font-medium text-popover-foreground shadow-md">
+                              {label}
+                            </span>
+                          )}
+                        </TabsTrigger>
+                      );
+                    })}
+                  </TabsList>
                 </div>
-                {/* Critical Issues Badge */}
-                {/* {criticalIssuesCount > 0 && (
+
+                {/* Right Side: Team + Chat + Add Button */}
+                <div className="flex items-center gap-2 shrink-0 justify-end md:w-auto">
+                  {!isMobile && <ProjectProgressPopover breakdown={progressBreakdown} />}
+                  {/* Project details — the full record (description, dates,
+                    departments, links). Unreachable from inside the project
+                    before this. */}
+                  {!isMobile && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9 rounded-lg shrink-0"
+                          onClick={() => navigate(`/projects/${id}/details`)}
+                        >
+                          <FolderOpen className="h-4 w-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Project Details</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {/* Team Popover */}
+                  <div className="hidden md:block">
+                    <ProjectTeamButton projectId={id!} />
+                  </div>
+                  {/* Start Chat */}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant={isChatPanelOpen ? 'secondary' : 'outline'}
+                        size="icon"
+                        className="h-9 w-9 rounded-lg hidden sm:flex shrink-0"
+                        onClick={handleStartProjectChat}
+                        disabled={isStartingChat || !canStartProjectChat}
+                      >
+                        {isStartingChat ? <Loader2 className="h-4 w-4 animate-spin" /> : <MessageCircle className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Chat</TooltipContent>
+                  </Tooltip>
+                  {/* Critical Issues Badge */}
+                  {/* {criticalIssuesCount > 0 && (
                 <Badge variant="destructive" className="gap-1 shrink-0 hidden sm:inline-flex">
                   <AlertTriangle className="h-3 w-3 shrink-0" />
                   {criticalIssuesCount} Critical
                 </Badge>
               )} */}
-                {/* Section Add/Action Buttons — on mobile these move down next to each
+                  {/* Section Add/Action Buttons — on mobile these move down next to each
                     section's search bar instead (see the "Second Row" block below),
                     so the tab strip doesn't end in a floating "+" square. */}
-                {section === 'tasks' && !isMobile && (
-                  <Button
-                    size="sm"
-                    onClick={() => setIsAddTaskDialogOpen(true)}
-                    className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Create Task</span>
-                  </Button>
-                )}
-                {section === 'modules' && canAddModulesAndMilestones && !isMobile && (
-                  <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={handleAddModule}>
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden md:inline">Add Module</span>
-                  </Button>
-                )}
-                {section === 'milestones' && canAddModulesAndMilestones && !isMobile && (
-                  <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddMilestoneDialogOpen(true)}>
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden md:inline">Add Milestone</span>
-                  </Button>
-                )}
-                {section === 'issues' && !isMobile && (
-                  <>
-                    {id && <SupportLinksSheet projectId={id} />}
-                    <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddIssueDialogOpen(true)}>
-                      <Plus className="h-4 w-4" />
-                      <span className="hidden md:inline">Report Issue</span>
-                    </Button>
-                  </>
-                )}
-                {section === 'bom' && !isMobile && (
-                  <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Add Part</span>
-                  </Button>
-                )}
-                {section === 'eng-changes' && !isMobile && (
-                  <Button size="sm" onClick={() => setEcoNewOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
-                    <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">New ECO</span>
-                  </Button>
-                )}
-                {section === 'gate-reviews' && (
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
-                      <Download className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Export</span>
-                    </Button>
-                    <Button size="sm" className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
-                      <Plus className="h-4 w-4" />
-                      <span className="hidden sm:inline">Add Gate</span>
-                    </Button>
-                  </div>
-                )}
-                {section === 'risk' && (
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
-                      <Download className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Export</span>
-                    </Button>
-                    <Button size="sm" className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
-                      <Plus className="h-4 w-4" />
-                      <span className="hidden sm:inline">Add Risk</span>
-                    </Button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Second Row: Search + View Toggle + Filter toolbar (below tabs, like BOM UI) */}
-          {(section === 'tasks' || section === 'modules' || section === 'milestones' || section === 'issues') && !isMobileModuleDetailOpen && (
-            <div className="flex items-center justify-between gap-3 mt-3 pb-3 border-b w-full">
-              {section === 'tasks' && (
-                <>
-                  {/* Left: Search */}
-                  <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
-                    <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
-                    <Input
-                      placeholder="Search tasks..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 pr-9 h-9 w-full bg-background rounded-lg"
-                    />
-                    {searchQuery && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
-                        onClick={() => setSearchQuery('')}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  {/* Right: View toggle + Filter */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <ViewControls
-                      viewMode={viewMode}
-                      onViewModeChange={setViewMode}
-                    />
-                    <TaskFiltersDropdown
-                      milestones={project.milestones || []}
-                      modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
-                      teamMembers={teamMembers}
-                      allTags={allTags}
-                      filters={filters}
-                      onFiltersChange={setFilters}
-                      activeFilterCount={activeFilterCount}
-                      statusOptions={filterStatusOptions}
-                    />
-                    {isMobile && (
-                      <button
-                        type="button"
-                        onClick={() => setIsAddTaskDialogOpen(true)}
-                        aria-label="Create Task"
-                        className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-              {section === 'modules' && (
-                <>
-                  {/* Left: Search */}
-                  <div className="relative flex items-center flex-1 min-w-0 max-w-none md:max-w-xs">
-                    <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
-                    <Input
-                      placeholder="Search modules..."
-                      value={moduleSearchQuery}
-                      onChange={(e) => setModuleSearchQuery(e.target.value)}
-                      className="pl-9 pr-9 h-9 w-full bg-background rounded-full md:rounded-lg"
-                    />
-                    {moduleSearchQuery && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
-                        onClick={() => setModuleSearchQuery('')}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  {/* Right: View toggle (desktop/tablet only — mobile always uses the card view) */}
-                  <div className="hidden md:flex items-center gap-2 shrink-0">
-                    <ModuleViewControls
-                      viewMode={moduleViewMode}
-                      onViewModeChange={setModuleViewMode}
-                    />
-                  </div>
-                  {isMobile && canAddModulesAndMilestones && (
-                    <button
-                      type="button"
-                      onClick={handleAddModule}
-                      aria-label="Add Module"
-                      className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
+                  {section === 'tasks' && !isMobile && (
+                    <Button
+                      size="sm"
+                      onClick={() => setIsAddTaskDialogOpen(true)}
+                      className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg"
                     >
                       <Plus className="h-4 w-4" />
-                    </button>
+                      <span className="hidden sm:inline">Create Task</span>
+                    </Button>
                   )}
-                </>
-              )}
-              {section === 'milestones' && (
-                <>
-                  {/* Left: Search */}
-                  <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
-                    <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
-                    <Input
-                      placeholder="Search milestones..."
-                      value={milestoneSearchQuery}
-                      onChange={(e) => setMilestoneSearchQuery(e.target.value)}
-                      className="pl-9 pr-9 h-9 w-full bg-background rounded-lg"
-                    />
-                    {milestoneSearchQuery && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
-                        onClick={() => setMilestoneSearchQuery('')}
-                      >
-                        <X className="h-4 w-4" />
+                  {section === 'modules' && canAddModulesAndMilestones && !isMobile && (
+                    <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={handleAddModule}>
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden md:inline">Add Module</span>
+                    </Button>
+                  )}
+                  {section === 'milestones' && canAddModulesAndMilestones && !isMobile && (
+                    <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddMilestoneDialogOpen(true)}>
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden md:inline">Add Milestone</span>
+                    </Button>
+                  )}
+                  {section === 'issues' && !isMobile && (
+                    <>
+                      {id && isSupportFeatureEnabled && <SupportLinksSheet projectId={id} />}
+                      <Button size="sm" className="gap-2 shrink-0 px-2 md:px-3" onClick={() => setIsAddIssueDialogOpen(true)}>
+                        <Plus className="h-4 w-4" />
+                        <span className="hidden md:inline">Report Issue</span>
                       </Button>
-                    )}
-                  </div>
-                  {/* Right: View toggle */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <MilestoneViewControls
-                      viewMode={milestoneViewMode}
-                      onViewModeChange={setMilestoneViewMode}
-                    />
+                    </>
+                  )}
+                  {section === 'bom' && !isMobile && (
+                    <Button size="sm" onClick={() => setBomAddOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden sm:inline">Add Part</span>
+                    </Button>
+                  )}
+                  {section === 'eng-changes' && !isMobile && (
+                    <Button size="sm" onClick={() => setEcoNewOpen(true)} className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden sm:inline">New ECO</span>
+                    </Button>
+                  )}
+                  {section === 'gate-reviews' && (
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
+                        <Download className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Export</span>
+                      </Button>
+                      <Button size="sm" className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                        <Plus className="h-4 w-4" />
+                        <span className="hidden sm:inline">Add Gate</span>
+                      </Button>
+                    </div>
+                  )}
+                  {section === 'risk' && (
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" className="gap-1.5 shrink-0 h-9">
+                        <Download className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Export</span>
+                      </Button>
+                      <Button size="sm" className="gap-2 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-0 w-9 sm:w-auto sm:px-3 rounded-lg">
+                        <Plus className="h-4 w-4" />
+                        <span className="hidden sm:inline">Add Risk</span>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Second Row: Search + View Toggle + Filter toolbar (below tabs, like BOM UI) */}
+            {(section === 'tasks' || section === 'modules' || section === 'milestones' || section === 'issues') && !isMobileModuleDetailOpen && (
+              <div className="flex items-center justify-between gap-3 mt-3 md:pb-3 w-full bg-background">
+                {section === 'tasks' && (
+                  <>
+                    {/* Left: Search */}
+                    <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                      <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
+                      <Input
+                        placeholder="Search tasks..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9 pr-9 h-9 w-full bg-background rounded-lg"
+                      />
+                      {searchQuery && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
+                          onClick={() => setSearchQuery('')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {/* Right: View toggle + Filter */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <ViewControls
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                      />
+                      {!isMobile && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 gap-1.5"
+                          onClick={() => setIsImportTasksDialogOpen(true)}
+                        >
+                          <Upload className="h-4 w-4" />
+                          Import
+                        </Button>
+                      )}
+                      <TaskFiltersDropdown
+                        milestones={project.milestones || []}
+                        modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
+                        teamMembers={teamMembers}
+                        allTags={allTags}
+                        filters={filters}
+                        onFiltersChange={setFilters}
+                        activeFilterCount={activeFilterCount}
+                        statusOptions={filterStatusOptions}
+                      />
+                      {isMobile && (
+                        <button
+                          type="button"
+                          onClick={() => setIsAddTaskDialogOpen(true)}
+                          aria-label="Create Task"
+                          className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+                {section === 'modules' && (
+                  <>
+                    {/* Left: Search */}
+                    <div className="relative flex items-center flex-1 min-w-0 max-w-none md:max-w-xs">
+                      <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
+                      <Input
+                        placeholder="Search modules..."
+                        value={moduleSearchQuery}
+                        onChange={(e) => setModuleSearchQuery(e.target.value)}
+                        className="pl-9 pr-9 h-9 w-full bg-background rounded-full md:rounded-lg"
+                      />
+                      {moduleSearchQuery && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
+                          onClick={() => setModuleSearchQuery('')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {/* Right: View toggle (desktop/tablet only — mobile always uses the card view) */}
+                    <div className="hidden md:flex items-center gap-2 shrink-0">
+                      <ModuleViewControls
+                        viewMode={moduleViewMode}
+                        onViewModeChange={setModuleViewMode}
+                      />
+                    </div>
                     {isMobile && canAddModulesAndMilestones && (
                       <button
                         type="button"
-                        onClick={() => setIsAddMilestoneDialogOpen(true)}
-                        aria-label="Add Milestone"
+                        onClick={handleAddModule}
+                        aria-label="Add Module"
                         className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
                       >
                         <Plus className="h-4 w-4" />
                       </button>
                     )}
-                  </div>
-                </>
-              )}
-              {section === 'issues' && (
-                <>
-                  {/* Left: Search */}
-                  <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
-                    <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
-                    <Input
-                      placeholder="Search issues..."
-                      value={issueSearchQuery}
-                      onChange={(e) => setIssueSearchQuery(e.target.value)}
-                      className="pl-9 pr-9 h-9 w-full bg-background rounded-lg"
-                    />
-                    {issueSearchQuery && (
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
-                        onClick={() => setIssueSearchQuery('')}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  {/* Right: View toggle + Filter */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <IssueViewControls
-                      viewMode={issueViewMode}
-                      onViewModeChange={setIssueViewMode}
-                      filters={issueFilters}
-                      onFiltersChange={setIssueFilters}
-                      teamMembers={projectMembers}
-                      issueColumns={issueColumns}
-                      allTags={allIssueTags}
-                      activeFilterCount={activeIssueFilterCount}
-                      onClearFilters={clearIssueFilters}
-                    />
-                    {isMobile && id && <SupportLinksSheet projectId={id} iconOnly />}
-                    {isMobile && (
-                      <button
-                        type="button"
-                        onClick={() => setIsAddIssueDialogOpen(true)}
-                        aria-label="Report Issue"
-                        className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
-          )}
+                  </>
+                )}
+                {section === 'milestones' && (
+                  <>
+                    {/* Left: Search */}
+                    <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                      <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
+                      <Input
+                        placeholder="Search milestones..."
+                        value={milestoneSearchQuery}
+                        onChange={(e) => setMilestoneSearchQuery(e.target.value)}
+                        className="pl-9 pr-9 h-9 w-full bg-background rounded-lg"
+                      />
+                      {milestoneSearchQuery && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
+                          onClick={() => setMilestoneSearchQuery('')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {/* Right: View toggle */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      <MilestoneViewControls
+                        viewMode={milestoneViewMode}
+                        onViewModeChange={setMilestoneViewMode}
+                      />
+                      {isMobile && canAddModulesAndMilestones && (
+                        <button
+                          type="button"
+                          onClick={() => setIsAddMilestoneDialogOpen(true)}
+                          aria-label="Add Milestone"
+                          className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+                {section === 'issues' && (
+                  <>
+                    {/* Left: Search */}
+                    <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                      <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
+                      <Input
+                        placeholder="Search issues..."
+                        value={issueSearchQuery}
+                        onChange={(e) => setIssueSearchQuery(e.target.value)}
+                        className="pl-9 pr-9 h-9 w-full bg-background rounded-lg"
+                      />
+                      {issueSearchQuery && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 h-9 w-9 text-foreground hover:opacity-70"
+                          onClick={() => setIssueSearchQuery('')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {/* Right: View toggle + Filter */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!isMobile && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 gap-1.5"
+                          onClick={() => setIsImportIssuesDialogOpen(true)}
+                        >
+                          <Upload className="h-4 w-4" />
+                          Import
+                        </Button>
+                      )}
+                      <IssueViewControls
+                        viewMode={issueViewMode}
+                        onViewModeChange={setIssueViewMode}
+                        filters={issueFilters}
+                        onFiltersChange={setIssueFilters}
+                        teamMembers={projectMembers}
+                        issueColumns={issueColumns}
+                        allTags={allIssueTags}
+                        activeFilterCount={activeIssueFilterCount}
+                        onClearFilters={clearIssueFilters}
+                      />
+                      {isMobile && (
+                        <button
+                          type="button"
+                          onClick={() => setIsAddIssueDialogOpen(true)}
+                          aria-label="Report Issue"
+                          className="w-9 h-9 rounded-lg bg-foreground text-background flex items-center justify-center shrink-0 active:opacity-90 transition-opacity"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
           </div>
+          )}
 
           <TabsContent value="tasks" className="mt-6">
             <TasksSection
               tasks={filteredTasks}
               allTasks={project.tasks || []}
               projectId={project.id}
+              projectCode={project.code}
               milestones={project.milestones || []}
               issues={project.issues || []}
               modules={modules.map(m => ({ id: m.id, name: m.name, type: m.type }))}
@@ -1683,6 +1874,7 @@ export default function ProjectDetail() {
               issues={project.issues || []}
               teamMembers={projectMembers}
               projectId={project.id}
+              projectCode={project.code}
               viewMode={moduleViewMode}
               onViewModeChange={setModuleViewMode}
               searchQuery={moduleSearchQuery}
@@ -1702,6 +1894,7 @@ export default function ProjectDetail() {
               tasks={project.tasks || []}
               issues={project.issues || []}
               modules={modules}
+              assignableMembers={projectMembers}
               viewMode={milestoneViewMode}
               projectStartDate={project.startDate ? new Date(project.startDate) : undefined}
               searchQuery={milestoneSearchQuery}
@@ -1711,11 +1904,13 @@ export default function ProjectDetail() {
               onMilestoneCreate={handleMilestoneCreate}
               onMilestoneDelete={handleMilestoneDelete}
               onIssueUpdate={handleIssueUpdate}
+              stickyOffset={stickyHeaderHeight}
             />
           </TabsContent>
-          <TabsContent value="issues" className="mt-6">
+          <TabsContent value="issues" className="mt-6 bg-background">
             <IssuesView
               issues={project.issues || []}
+              projectCode={project.code}
               viewMode={issueViewMode}
               tasks={project.tasks || []}
               teamMembers={projectMembers}
@@ -1727,8 +1922,13 @@ export default function ProjectDetail() {
               updatedByFilter={issueFilters.updatedById}
               dueDateFilter={issueFilters.dueDate}
               dueDateCustomFilter={issueFilters.dueDateCustom}
+              dueDateCustomToFilter={issueFilters.dueDateCustomTo}
               reportedDateFilter={issueFilters.reportedDate}
               reportedDateCustomFilter={issueFilters.reportedDateCustom}
+              reportedDateCustomToFilter={issueFilters.reportedDateCustomTo}
+              completedDateFilter={issueFilters.completedDate}
+              completedDateCustomFilter={issueFilters.completedDateCustom}
+              completedDateCustomToFilter={issueFilters.completedDateCustomTo}
               tagsFilter={issueFilters.tags}
               isAddDialogOpen={isAddIssueDialogOpen}
               onAddDialogClose={() => setIsAddIssueDialogOpen(false)}
@@ -1736,6 +1936,7 @@ export default function ProjectDetail() {
               onIssueUpdate={handleIssueUpdate}
               onIssueDelete={handleIssueDelete}
               userProjectRole={project?.myRole}
+              stickyOffset={stickyHeaderHeight}
             />
           </TabsContent>
           <TabsContent value="bom" className="mt-0 -mx-4 md:-mx-6 -mb-6 flex flex-col">
@@ -1783,6 +1984,18 @@ export default function ProjectDetail() {
         existingModuleNames={existingModuleNames}
       />
 
+      <ImportTasksDialog
+        open={isImportTasksDialogOpen}
+        onClose={() => setIsImportTasksDialogOpen(false)}
+        projectId={project.id}
+      />
+
+      <ImportIssuesDialog
+        open={isImportIssuesDialogOpen}
+        onClose={() => setIsImportIssuesDialogOpen(false)}
+        projectId={project.id}
+      />
+
       <TaskDetailModal
         task={null}
         allTasks={project.tasks || []}
@@ -1794,6 +2007,7 @@ export default function ProjectDetail() {
         modules={modules}
         milestones={project.milestones || []}
         projectId={id}
+        projectCode={project.code}
         onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
         assignableMembers={projectMembers}
         statusOptions={(boardColumns ?? []).map((c) => ({
@@ -1817,6 +2031,7 @@ export default function ProjectDetail() {
           modules={modules}
           milestones={project.milestones || []}
           projectId={id}
+          projectCode={project.code}
           onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
           assignableMembers={organizationMembers}
           statusOptions={(boardColumns ?? []).map((c) => ({
@@ -1845,6 +2060,7 @@ export default function ProjectDetail() {
           tasks={project.tasks || []}
           issues={project.issues || []}
           modules={modules}
+          assignableMembers={projectMembers}
           isOpen={!!milestoneId}
           onClose={() => navigate(`/projects/${id}/milestones`)}
           onUpdate={handleMilestoneUpdate}
@@ -1863,6 +2079,7 @@ export default function ProjectDetail() {
           onDelete={handleIssueDelete}
           userProjectRole={project?.myRole}
           mode="view"
+          projectCode={project.code}
         />
       )}
 

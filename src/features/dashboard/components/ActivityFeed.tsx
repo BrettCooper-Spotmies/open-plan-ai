@@ -18,6 +18,12 @@ import {
   Users,
   Milestone,
   Link as LinkIcon,
+  Layers,
+  Cpu,
+  Tag,
+  Columns3,
+  Building2,
+  Package,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,6 +38,8 @@ interface ActivityFeedProps {
   activities: Activity[];
   isLoading: boolean;
   className?: string;
+  /** When provided, issue activities open in an in-place modal instead of navigating to the project page. */
+  onIssueClick?: (projectId: string, issueId: string) => void;
 }
 
 const activityIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -50,6 +58,7 @@ const activityIcons: Record<string, React.ComponentType<{ className?: string }>>
   issue_created: AlertTriangle,
   issue_resolved: CheckCircle,
   issue_updated: ArrowRight,
+  issue_deleted: Trash2,
   issue_assigned: UserPlus,
   issue_linked_to_task: LinkIcon,
   project_created: FolderPlus,
@@ -58,6 +67,36 @@ const activityIcons: Record<string, React.ComponentType<{ className?: string }>>
   project_deleted: Trash2,
   project_member_added: Users,
   dependency_added: GitBranch,
+  'bom.node_created': Layers,
+  'bom.node_deleted': Trash2,
+  'bom.part_created': Layers,
+  'bom.part_updated': ArrowRight,
+  'bom.part_deleted': Trash2,
+  module_created: Cpu,
+  module_updated: ArrowRight,
+  module_deleted: Trash2,
+  tag_created: Tag,
+  tag_updated: ArrowRight,
+  tag_deleted: Trash2,
+  task_column_created: Columns3,
+  task_column_updated: ArrowRight,
+  task_column_deleted: Trash2,
+  issue_column_created: Columns3,
+  issue_column_updated: ArrowRight,
+  issue_column_deleted: Trash2,
+  org_created: Building2,
+  org_deleted: Trash2,
+  'inventory.stock_received': Package,
+  'inventory.stock_adjusted': Package,
+  'inventory.quarantine_released': Package,
+  'inventory.stock_issued': Package,
+  'inventory.stock_transferred': Package,
+  'inventory.stock_allocated': Package,
+  'inventory.order_placed': Package,
+  'inventory.build_created': Package,
+  'inventory.build_allocated': Package,
+  'inventory.build_kitted': Package,
+  'inventory.shortage_ordered': Package,
 };
 
 const activityColors: Record<string, string> = {
@@ -76,6 +115,7 @@ const activityColors: Record<string, string> = {
   issue_created: 'text-destructive bg-destructive/10',
   issue_resolved: 'text-status-done bg-status-done/10',
   issue_updated: 'text-muted-foreground bg-muted',
+  issue_deleted: 'text-destructive bg-destructive/10',
   issue_assigned: 'text-chart-2 bg-chart-2/10',
   issue_linked_to_task: 'text-chart-5 bg-chart-5/10',
   project_created: 'text-primary bg-primary/10',
@@ -84,6 +124,36 @@ const activityColors: Record<string, string> = {
   project_deleted: 'text-destructive bg-destructive/10',
   project_member_added: 'text-chart-2 bg-chart-2/10',
   dependency_added: 'text-chart-5 bg-chart-5/10',
+  'bom.node_created': 'text-primary bg-primary/10',
+  'bom.node_deleted': 'text-destructive bg-destructive/10',
+  'bom.part_created': 'text-primary bg-primary/10',
+  'bom.part_updated': 'text-muted-foreground bg-muted',
+  'bom.part_deleted': 'text-destructive bg-destructive/10',
+  module_created: 'text-chart-2 bg-chart-2/10',
+  module_updated: 'text-muted-foreground bg-muted',
+  module_deleted: 'text-destructive bg-destructive/10',
+  tag_created: 'text-chart-4 bg-chart-4/10',
+  tag_updated: 'text-muted-foreground bg-muted',
+  tag_deleted: 'text-destructive bg-destructive/10',
+  task_column_created: 'text-status-in-progress bg-status-in-progress/10',
+  task_column_updated: 'text-muted-foreground bg-muted',
+  task_column_deleted: 'text-destructive bg-destructive/10',
+  issue_column_created: 'text-destructive bg-destructive/10',
+  issue_column_updated: 'text-muted-foreground bg-muted',
+  issue_column_deleted: 'text-destructive bg-destructive/10',
+  org_created: 'text-primary bg-primary/10',
+  org_deleted: 'text-destructive bg-destructive/10',
+  'inventory.stock_received': 'text-status-done bg-status-done/10',
+  'inventory.stock_adjusted': 'text-muted-foreground bg-muted',
+  'inventory.quarantine_released': 'text-status-done bg-status-done/10',
+  'inventory.stock_issued': 'text-chart-5 bg-chart-5/10',
+  'inventory.stock_transferred': 'text-chart-5 bg-chart-5/10',
+  'inventory.stock_allocated': 'text-chart-2 bg-chart-2/10',
+  'inventory.order_placed': 'text-chart-2 bg-chart-2/10',
+  'inventory.build_created': 'text-primary bg-primary/10',
+  'inventory.build_allocated': 'text-chart-2 bg-chart-2/10',
+  'inventory.build_kitted': 'text-status-done bg-status-done/10',
+  'inventory.shortage_ordered': 'text-priority-high bg-priority-high/10',
 };
 
 // Short verb phrase for the mobile "{name} {phrase}" line — the full description
@@ -104,6 +174,7 @@ const activityActionText: Record<string, string> = {
   issue_created: 'opened an issue',
   issue_resolved: 'resolved an issue',
   issue_updated: 'updated an issue',
+  issue_deleted: 'deleted an issue',
   issue_assigned: 'was assigned an issue',
   issue_linked_to_task: 'linked an issue',
   project_created: 'created a project',
@@ -112,6 +183,36 @@ const activityActionText: Record<string, string> = {
   project_deleted: 'deleted a project',
   project_member_added: 'added a member',
   dependency_added: 'added a dependency',
+  'bom.node_created': 'added a BOM node',
+  'bom.node_deleted': 'removed a BOM node',
+  'bom.part_created': 'created a part',
+  'bom.part_updated': 'updated a part',
+  'bom.part_deleted': 'deleted a part',
+  module_created: 'created a module',
+  module_updated: 'updated a module',
+  module_deleted: 'deleted a module',
+  tag_created: 'created a tag',
+  tag_updated: 'updated a tag',
+  tag_deleted: 'deleted a tag',
+  task_column_created: 'added a task column',
+  task_column_updated: 'updated a task column',
+  task_column_deleted: 'removed a task column',
+  issue_column_created: 'added an issue column',
+  issue_column_updated: 'updated an issue column',
+  issue_column_deleted: 'removed an issue column',
+  org_created: 'created the organization',
+  org_deleted: 'deleted the organization',
+  'inventory.stock_received': 'received stock',
+  'inventory.stock_adjusted': 'adjusted stock',
+  'inventory.quarantine_released': 'released quarantine',
+  'inventory.stock_issued': 'issued stock',
+  'inventory.stock_transferred': 'transferred stock',
+  'inventory.stock_allocated': 'allocated stock',
+  'inventory.order_placed': 'placed an order',
+  'inventory.build_created': 'created a build',
+  'inventory.build_allocated': 'allocated a build',
+  'inventory.build_kitted': 'kitted a build',
+  'inventory.shortage_ordered': 'ordered a shortage',
 };
 
 const avatarColors = ['bg-violet-500', 'bg-blue-500', 'bg-emerald-500', 'bg-amber-500', 'bg-rose-500', 'bg-cyan-500', 'bg-orange-500', 'bg-indigo-500'];
@@ -138,6 +239,7 @@ const activityLabels: Record<string, string> = {
   issue_created: 'Issue Opened',
   issue_resolved: 'Issue Resolved',
   issue_updated: 'Issue Updated',
+  issue_deleted: 'Issue Deleted',
   issue_assigned: 'Issue Assigned',
   issue_linked_to_task: 'Issue Linked',
   project_created: 'New Project',
@@ -146,6 +248,36 @@ const activityLabels: Record<string, string> = {
   project_deleted: 'Project Deleted',
   project_member_added: 'Member Added',
   dependency_added: 'Dependency Added',
+  'bom.node_created': 'BOM Node Added',
+  'bom.node_deleted': 'BOM Node Removed',
+  'bom.part_created': 'Part Created',
+  'bom.part_updated': 'Part Updated',
+  'bom.part_deleted': 'Part Deleted',
+  module_created: 'Module Created',
+  module_updated: 'Module Updated',
+  module_deleted: 'Module Deleted',
+  tag_created: 'Tag Created',
+  tag_updated: 'Tag Updated',
+  tag_deleted: 'Tag Deleted',
+  task_column_created: 'Task Column Added',
+  task_column_updated: 'Task Column Updated',
+  task_column_deleted: 'Task Column Removed',
+  issue_column_created: 'Issue Column Added',
+  issue_column_updated: 'Issue Column Updated',
+  issue_column_deleted: 'Issue Column Removed',
+  org_created: 'Organization Created',
+  org_deleted: 'Organization Deleted',
+  'inventory.stock_received': 'Stock Received',
+  'inventory.stock_adjusted': 'Stock Adjusted',
+  'inventory.quarantine_released': 'Quarantine Released',
+  'inventory.stock_issued': 'Stock Issued',
+  'inventory.stock_transferred': 'Stock Transferred',
+  'inventory.stock_allocated': 'Stock Allocated',
+  'inventory.order_placed': 'Order Placed',
+  'inventory.build_created': 'Build Created',
+  'inventory.build_allocated': 'Build Allocated',
+  'inventory.build_kitted': 'Build Kitted',
+  'inventory.shortage_ordered': 'Shortage Ordered',
 };
 
 // Maps an activity's entityType to the deep-link route for that specific record —
@@ -178,24 +310,39 @@ const activitySection: Record<string, string> = {
   issue_created: 'issues',
   issue_resolved: 'issues',
   issue_updated: 'issues',
+  issue_deleted: 'issues',
   issue_assigned: 'issues',
   issue_linked_to_task: 'issues',
+  'bom.node_created': 'bom',
+  'bom.node_deleted': 'bom',
+  'bom.part_created': 'bom',
+  'bom.part_updated': 'bom',
+  'bom.part_deleted': 'bom',
+  module_created: 'modules',
+  module_updated: 'modules',
+  module_deleted: 'modules',
+  task_column_created: 'tasks',
+  task_column_updated: 'tasks',
+  task_column_deleted: 'tasks',
+  issue_column_created: 'issues',
+  issue_column_updated: 'issues',
+  issue_column_deleted: 'issues',
 };
 
-export function ActivityFeed({ activities, isLoading, className }: ActivityFeedProps) {
+export function ActivityFeed({ activities, isLoading, className, onIssueClick }: ActivityFeedProps) {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
   if (isLoading) {
     return (
-      <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden', className)}>
+      <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden rounded-2xl border-border/70 shadow-sm min-w-0', className)}>
         <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
           <CardTitle className="min-w-0 text-base font-medium flex items-center gap-2">
             <PanelIcon icon={ActivityIcon} color="#2563EB" />
             <span className="truncate">Recent Activity</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-1">
+        <CardContent className="space-y-1 min-w-0">
           {/* Placeholder for loading state */}
           <div className="flex flex-col items-center justify-center py-8 text-center animate-pulse">
             <div className="w-10 h-10 rounded-full bg-muted/50 flex items-center justify-center mb-3">
@@ -212,7 +359,7 @@ export function ActivityFeed({ activities, isLoading, className }: ActivityFeedP
   }
 
   return (
-    <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden', className)}>
+    <Card className={cn('flex flex-col h-full min-h-0 overflow-hidden rounded-2xl border-border/70 shadow-sm min-w-0', className)}>
       <CardHeader className="px-3 py-2 flex flex-row items-center justify-between gap-2">
         <CardTitle className="min-w-0 text-base font-medium flex items-center gap-2">
           <PanelIcon icon={ActivityIcon} color="#2563EB" />
@@ -264,10 +411,23 @@ export function ActivityFeed({ activities, isLoading, className }: ActivityFeedP
                 return `/projects/${activity.projectId}${section ? `/${section}` : ''}`;
               };
 
+              // Issue activities open as an overlay on the dashboard itself when a handler is
+              // given, instead of navigating away to the project page and stranding the user
+              // there once the modal is closed.
+              const isIssueDeepLink = !isDeletion && activity.entityType === 'issue' && !!activity.entityId;
+              const handleClick = () => {
+                if (!isClickable) return;
+                if (isIssueDeepLink && onIssueClick) {
+                  onIssueClick(activity.projectId, activity.entityId!);
+                  return;
+                }
+                navigate(targetPath());
+              };
+
               return (
                 <div
                   key={activity.id}
-                  onClick={() => isClickable && navigate(targetPath())}
+                  onClick={handleClick}
                   className={cn(
                     'flex items-start gap-3 py-2.5 border-b border-border/50 last:border-0 transition-colors px-2 rounded-md',
                     isClickable && 'hover:bg-muted/30 cursor-pointer',
@@ -294,10 +454,9 @@ export function ActivityFeed({ activities, isLoading, className }: ActivityFeedP
                   {/* Center: Content */}
                   <div className="flex-1 min-w-0">
                     {/* Primary: Actor name (bold) + action text */}
-                    <p className="text-sm leading-snug break-all line-clamp-2">
-                      <span className="font-semibold">{activity.user.name}</span>
-                      {' '}
-                      <span className="text-muted-foreground text-foreground/80">{isMobile ? actionText : activity.description}</span>
+                    <p className="text-sm leading-snug flex items-baseline gap-1 min-w-0">
+                      <span className="font-semibold truncate max-w-[45%] shrink-0" title={activity.user.name}>{activity.user.name}</span>
+                      <span className="text-muted-foreground text-foreground/80 break-words line-clamp-2 min-w-0">{isMobile ? actionText : activity.description}</span>
                     </p>
 
                     {/* Mobile: quoted description as a secondary line */}

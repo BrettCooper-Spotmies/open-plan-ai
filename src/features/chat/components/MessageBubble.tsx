@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, Forward, ZoomIn, FileImage, File as FileIcon2, Pin, PinOff, Bookmark, Eye } from 'lucide-react';
+import { Copy, Pencil, Trash2, FileText, Download, Check, X, CheckCheck, MoreHorizontal, SmilePlus, Clock, Loader2, Reply, Forward, ZoomIn, FileImage, File as FileIcon2, Pin, PinOff, Bookmark, Eye, ImageOff, AlertCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { FilePreviewDialog } from '@/components/FilePreviewDialog';
 import { Button } from '@/components/ui/button';
@@ -360,36 +360,50 @@ function FileAttachment({
 }) {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // A file can claim an image mime type and still be undecodable — a truncated
+  // upload, or one edited in a text editor. Hiding the <img> left an empty
+  // bubble with no filename, size or way to download it; fall back to the file
+  // card instead so the message still says what was sent.
+  const [imageFailed, setImageFailed] = useState(false);
   const url = file.url ?? '';
   const fileType = getFileType(file.mimeType ?? '', file.fileName ?? '');
-  const Icon = getFileIcon(fileType);
+  const isBrokenImage = fileType === 'image' && imageFailed;
+  const sendFailed = message?.status === 'failed';
+  const isSending = message?.isOptimistic || message?.status === 'sending';
+  const Icon = sendFailed ? AlertCircle : isBrokenImage ? ImageOff : getFileIcon(fileType);
   const handleClick = useCallback(() => {
-    if (!url) return;
+    if (!url || isBrokenImage || isSending || sendFailed) return;
     if (fileType === 'image') {
       setLightboxOpen(true);
     } else {
       setPreviewOpen(true);
     }
-  }, [url, fileType]);
+  }, [url, fileType, isBrokenImage, isSending, sendFailed]);
 
-  if (fileType === 'image') {
+  if (fileType === 'image' && !imageFailed && !sendFailed) {
     return (
       <>
         <div
           className="group relative cursor-pointer rounded-xl overflow-hidden max-w-full"
           style={{ maxWidth: 280 }}
-          onClick={handleClick}
-          title="Click to view"
+          onClick={isSending ? undefined : handleClick}
+          title={isSending ? 'Sending…' : 'Click to view'}
         >
           <img
             src={url}
             alt={file.fileName}
-            className="w-full max-h-[220px] object-cover rounded-xl"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+            className={cn('w-full max-h-[220px] object-cover rounded-xl', isSending && 'opacity-60')}
+            onError={() => setImageFailed(true)}
           />
-          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
-            <ZoomIn className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
-          </div>
+          {isSending ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/10">
+              <Loader2 className="h-6 w-6 animate-spin text-white drop-shadow" />
+            </div>
+          ) : (
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+              <ZoomIn className="h-8 w-8 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+            </div>
+          )}
         </div>
         {file.text && <p className="text-sm mt-1 break-words">{file.text}</p>}
         {lightboxOpen && url && (
@@ -408,7 +422,15 @@ function FileAttachment({
   // with a dedicated preview action beside the name (opens the file in a modal
   // instead of triggering a raw browser download).
   const isPreviewable = fileType === 'pdf' || fileType === 'doc';
+  const fileTypeLabel = sendFailed
+    ? 'Failed to send'
+    : isSending
+      ? 'Sending…'
+      : isBrokenImage
+        ? "Image can't be displayed"
+        : fileType === 'pdf' ? 'PDF' : fileType === 'doc' ? 'Document' : '';
   return (
+    <>
     <div
       className={cn(
         'w-full max-w-full rounded-xl border overflow-hidden',
@@ -418,17 +440,20 @@ function FileAttachment({
       <button
         type="button"
         onClick={handleClick}
-        disabled={!url}
+        disabled={!url || isBrokenImage || isSending || sendFailed}
         className={cn(
           'flex w-full items-center justify-center h-16 transition-colors',
-          'hover:bg-accent/40 disabled:opacity-50 disabled:cursor-not-allowed',
-          fileType === 'pdf' ? 'bg-red-500/10 text-red-500' :
-            fileType === 'doc' ? 'bg-blue-500/10 text-blue-500' :
-              'bg-muted text-muted-foreground'
+          'hover:bg-accent/40 disabled:cursor-default',
+          !isBrokenImage && !sendFailed && 'disabled:opacity-50',
+          sendFailed ? 'bg-destructive/10 text-destructive' :
+            isBrokenImage ? 'bg-muted text-muted-foreground hover:bg-muted' :
+              fileType === 'pdf' ? 'bg-red-500/10 text-red-500' :
+                fileType === 'doc' ? 'bg-blue-500/10 text-blue-500' :
+                  'bg-muted text-muted-foreground'
         )}
-        title={isPreviewable ? `Open ${fileType.toUpperCase()} preview` : 'Open file'}
+        title={sendFailed ? 'Failed to send' : isSending ? 'Sending…' : isBrokenImage ? "This image can't be displayed" : isPreviewable ? `Open ${fileType.toUpperCase()} preview` : 'Open file'}
       >
-        <Icon className="h-7 w-7" />
+        {isSending ? <Loader2 className="h-7 w-7 animate-spin" /> : <Icon className="h-7 w-7" />}
       </button>
       <div
         className={cn(
@@ -440,20 +465,37 @@ function FileAttachment({
           <p className="text-sm font-medium truncate">{file.fileName}</p>
           <p className="text-xs opacity-60 mt-0.5">
             {file.fileSize ? formatFileSize(file.fileSize) : ''}
-            {file.fileSize && fileType !== 'other' ? ' · ' : ''}
-            {fileType === 'pdf' ? 'PDF' : fileType === 'doc' ? 'Document' : ''}
+            {file.fileSize && fileTypeLabel ? ' · ' : ''}
+            {fileTypeLabel}
           </p>
         </div>
-        {url && (
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setPreviewOpen(true); }}
-            title="Preview"
-            className="h-8 px-2.5 shrink-0 rounded-full flex items-center gap-1 opacity-80 hover:opacity-100 hover:bg-accent/70 transition-colors text-xs font-medium"
-          >
-            <Eye className="h-3.5 w-3.5" />
-            Preview
-          </button>
+        {url && !isSending && !sendFailed && (
+          isBrokenImage ? (
+            // The bytes are still downloadable even when the browser can't
+            // decode them — let the recipient grab the original and check it.
+            <a
+              href={url}
+              download={file.fileName}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="Download original file"
+              className="h-8 px-2.5 shrink-0 rounded-full flex items-center gap-1 opacity-80 hover:opacity-100 hover:bg-accent/70 transition-colors text-xs font-medium"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setPreviewOpen(true); }}
+              title="Preview"
+              className="h-8 px-2.5 shrink-0 rounded-full flex items-center gap-1 opacity-80 hover:opacity-100 hover:bg-accent/70 transition-colors text-xs font-medium"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              Preview
+            </button>
+          )
         )}
       </div>
       {previewOpen && url && (
@@ -463,6 +505,8 @@ function FileAttachment({
         />
       )}
     </div>
+    {file.text && <p className="text-sm mt-1 break-words">{file.text}</p>}
+    </>
   );
 }
 
@@ -487,7 +531,7 @@ export function MessageBubble({
         fileSize: a.size ?? a.fileSize ?? 0,
         mimeType: a.mimeType ?? a.type ?? '',
         url: a.url ?? '',
-        text: message.contentType !== 'image' && message.contentType !== 'file' ? message.content : undefined,
+        text: message.contentType === 'image' || message.contentType === 'file' ? message.content : undefined,
       };
     }
     // Legacy format: JSON encoded in content
@@ -516,6 +560,7 @@ export function MessageBubble({
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Touch devices don't fire hover reliably, so the toolbar is opened by tapping the bubble instead.
   const [isMobileToolbarOpen, setIsMobileToolbarOpen] = useState(false);
+  const [avatarLightboxOpen, setAvatarLightboxOpen] = useState(false);
 
   const getReactorNames = useCallback((r: MessageReaction) => {
     return r.userIds.map((id) => {
@@ -607,7 +652,19 @@ export function MessageBubble({
     setShowDeleteConfirm(false);
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
+    if ((message.contentType === 'image') && fileData?.url) {
+      try {
+        const response = await fetch(fileData.url);
+        const blob = await response.blob();
+        await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+        toast.success('Copied to clipboard');
+      } catch {
+        await navigator.clipboard.writeText(fileData.url);
+        toast.success('Copied to clipboard');
+      }
+      return;
+    }
     navigator.clipboard.writeText(message.content);
     toast.success('Copied to clipboard');
   };
@@ -652,7 +709,7 @@ export function MessageBubble({
     return (
       <div className={cn('flex gap-2 px-4', isOwn ? 'flex-row-reverse' : 'flex-row')}>
         {isGroupChat && <div className="w-8 shrink-0" />}
-        <div className={cn('flex flex-col max-w-[70%] min-w-0', isOwn ? 'items-end' : 'items-start')}>
+        <div className={cn('flex flex-col max-w-[70%] md:max-w-[min(70%,calc(100%_-_15rem))] min-w-0', isOwn ? 'items-end' : 'items-start')}>
           <div className="rounded-2xl px-3 py-2 text-sm italic text-muted-foreground bg-muted/50 border border-dashed border-border">
             🚫 This message was deleted by {message.deletedByName || message.senderName}
           </div>
@@ -671,17 +728,27 @@ export function MessageBubble({
       {isGroupChat && (
         <div className="w-8 shrink-0">
           {showSenderInfo && !isOwn && (
-            <Avatar className="h-8 w-8">
+            <Avatar
+              className={cn('h-8 w-8', message.senderAvatar && 'cursor-pointer')}
+              onClick={() => message.senderAvatar && setAvatarLightboxOpen(true)}
+            >
               {message.senderAvatar && (
                 <AvatarImage src={message.senderAvatar} alt={message.senderName} className="object-cover" />
               )}
               <AvatarFallback className="text-[10px]">{message.senderInitials}</AvatarFallback>
             </Avatar>
           )}
+          {avatarLightboxOpen && message.senderAvatar && (
+            <ImageLightbox
+              src={message.senderAvatar}
+              alt={message.senderName}
+              onClose={() => setAvatarLightboxOpen(false)}
+            />
+          )}
         </div>
       )}
 
-      <div className={cn('flex flex-col max-w-[70%] min-w-0', isOwn ? 'items-end' : 'items-start')}>
+      <div className={cn('flex flex-col max-w-[70%] md:max-w-[min(70%,calc(100%_-_15rem))] min-w-0', isOwn ? 'items-end' : 'items-start')}>
         {showSenderInfo && !isOwn && isGroupChat && (
           <span className="text-xs text-muted-foreground font-medium mb-0.5 px-1">{message.senderName}</span>
         )}

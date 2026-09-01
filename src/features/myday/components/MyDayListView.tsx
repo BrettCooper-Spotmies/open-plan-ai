@@ -11,7 +11,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination';
-import { cn } from '@/lib/utils';
+import { cn, getDisplayId } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { CheckSquare, Bug, Check, ChevronUp, ChevronDown, Loader2 } from 'lucide-react';
@@ -21,6 +21,7 @@ import {
   groupTasksByProgress,
   groupTasksByDueDate,
   groupTasksByPriority,
+  isMyDayItemComplete,
 } from '../utils/myDayUtils';
 import { MyDayGroupBy, TaskStatus } from '@/types';
 
@@ -29,6 +30,7 @@ interface MyDayListViewProps {
   groupBy: MyDayGroupBy;
   onTaskClick: (item: MyDayItem) => void;
   onStatusUpdate: (taskId: string, status: TaskStatus) => void;
+  emptyMessage?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -99,6 +101,7 @@ export function MyDayListView({
   groupBy,
   onTaskClick,
   onStatusUpdate,
+  emptyMessage = 'No tasks to display',
 }: MyDayListViewProps) {
   const isMobile = useIsMobile();
   const [sortField, setSortField] = useState<SortField | null>(null);
@@ -260,10 +263,10 @@ export function MyDayListView({
     </TableHead>
   );
 
-  if (allTasks.length === 0) {
+  if (isMobile && allTasks.length === 0) {
     return (
       <div className="text-center py-12 text-muted-foreground">
-        No tasks to display
+        {emptyMessage}
       </div>
     );
   }
@@ -276,7 +279,7 @@ export function MyDayListView({
       <div className="space-y-3">
         <div className="rounded-lg border divide-y divide-border">
           {visibleTasks.map((task) => {
-            const isComplete = task.status === 'done' || task.status === 'resolved';
+            const isComplete = isMyDayItemComplete(task.status);
             return (
               <div
                 key={task.id}
@@ -298,6 +301,11 @@ export function MyDayListView({
                   {isComplete && <Check className="h-3 w-3 text-white" />}
                 </button>
                 <div className="min-w-0 flex-1">
+                  {getDisplayId(task.projectCode, task.itemType === 'task' ? 'T' : 'I', task.number) && (
+                    <span className="font-mono font-semibold text-[10px] text-blue-500 block">
+                      {getDisplayId(task.projectCode, task.itemType === 'task' ? 'T' : 'I', task.number)}
+                    </span>
+                  )}
                   <p className="font-semibold text-[15px] leading-snug truncate">{task.title}</p>
                   <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                     <Badge
@@ -362,7 +370,13 @@ export function MyDayListView({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {paginatedTasks.map((task) => (
+          {paginatedTasks.length === 0 ? (
+            <TableRow>
+              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                {emptyMessage}
+              </TableCell>
+            </TableRow>
+          ) : paginatedTasks.map((task) => (
             <TableRow
               key={task.id}
               className="cursor-pointer hover:bg-muted/50"
@@ -374,22 +388,27 @@ export function MyDayListView({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      const isComplete = task.status === 'done' || task.status === 'resolved';
+                      const isComplete = isMyDayItemComplete(task.status);
                       onStatusUpdate(task.id, isComplete ? 'todo' : 'done');
                     }}
-                    aria-label={(task.status === 'done' || task.status === 'resolved') ? 'Mark as incomplete' : 'Mark as complete'}
+                    aria-label={isMyDayItemComplete(task.status) ? 'Mark as incomplete' : 'Mark as complete'}
                     className={cn(
                       'h-4 w-4 rounded-full border flex items-center justify-center shrink-0 mt-0.5 transition-colors',
-                      (task.status === 'done' || task.status === 'resolved')
+                      isMyDayItemComplete(task.status)
                         ? 'bg-status-done border-status-done'
                         : 'border-muted-foreground/40 hover:border-status-done'
                     )}
                   >
-                    {(task.status === 'done' || task.status === 'resolved') && (
+                    {isMyDayItemComplete(task.status) && (
                       <Check className="h-3 w-3 text-white" />
                     )}
                   </button>
                   <div className="min-w-0">
+                    {getDisplayId(task.projectCode, task.itemType === 'task' ? 'T' : 'I', task.number) && (
+                      <span className="font-mono font-semibold text-[10px] text-blue-500 block">
+                        {getDisplayId(task.projectCode, task.itemType === 'task' ? 'T' : 'I', task.number)}
+                      </span>
+                    )}
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <p className="font-medium truncate max-w-[260px] cursor-pointer">{task.title}</p>
@@ -481,7 +500,7 @@ export function MyDayListView({
         </TableBody>
       </Table>
 
-      {totalPages > 1 && (
+      {paginatedTasks.length > 0 && totalPages > 1 && (
         <div className="flex flex-col items-center gap-2 py-4 border-t">
           <p className="text-xs text-muted-foreground">
             Page {safeCurrentPage} of {totalPages} ({allTasks.length} items)

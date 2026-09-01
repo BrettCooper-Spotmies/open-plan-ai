@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useOrgPermissions } from '@/hooks/useProjectPermissions';
 import { OrganizationSettings } from '@/services/organizations.service';
@@ -18,8 +19,9 @@ import { resolveFileUrl } from '@/utils/fileUrl';
 import { toast } from 'sonner';
 import { useChatStore } from '@/features/chat/stores/useChatStore';
 import { useAssistantDraftStore } from '@/features/assistant/stores/useAssistantDraftStore';
+import { useFeatureTogglesStore, type ToggleableFeature } from '@/stores/useFeatureTogglesStore';
 
-const mainNavItems = [{
+const mainNavItems: { title: string; url: string; icon: typeof LayoutDashboard; feature?: ToggleableFeature }[] = [{
   title: 'Dashboard',
   url: '/',
   icon: LayoutDashboard
@@ -30,7 +32,8 @@ const mainNavItems = [{
 }, {
   title: 'My Tasks',
   url: '/my-day',
-  icon: ListTodo
+  icon: ListTodo,
+  feature: 'my-tasks'
 }, {
   title: 'Projects',
   url: '/projects',
@@ -38,15 +41,18 @@ const mainNavItems = [{
 }, {
   title: 'Calendar',
   url: '/calendar',
-  icon: Calendar
+  icon: Calendar,
+  feature: 'calendar'
 }, {
   title: 'Reports',
   url: '/reports',
-  icon: BarChart3
+  icon: BarChart3,
+  feature: 'reports'
 }, {
   title: 'Inventory',
   url: '/inventory',
-  icon: Warehouse
+  icon: Warehouse,
+  feature: 'inventory'
 }, {
   title: 'Chat',
   url: '/chat',
@@ -76,6 +82,8 @@ export function AppSidebar() {
   const { isOrgAdmin: canCreateOrg } = useOrgPermissions();
   const chatUnreadCount = useChatStore((s) => s.getTotalUnread());
   const lastAssistantConversationId = useAssistantDraftStore((s) => s.lastActiveConversationId);
+  const enabledFeatures = useFeatureTogglesStore((s) => s.enabled);
+  const visibleMainNavItems = mainNavItems.filter((item) => !item.feature || enabledFeatures[item.feature]);
 
   const [orgPopoverOpen, setOrgPopoverOpen] = useState(false);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -194,8 +202,16 @@ export function AppSidebar() {
                 <Separator />
                 <div className="max-h-[240px] overflow-y-auto py-1">
                   {orgLoading ? (
-                    <div className="flex items-center justify-center py-6">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    <div className="flex flex-col gap-1 py-1">
+                      {Array.from({ length: 3 }).map((_, i) => (
+                        <div key={i} className="flex items-center gap-3 px-3 py-2">
+                          <Skeleton className="h-7 w-7 shrink-0 rounded-md" />
+                          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                            <Skeleton className="h-3.5 w-24" />
+                            <Skeleton className="h-2.5 w-16" />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : organizations.length === 0 ? (
                     <div className="px-3 py-4 text-center">
@@ -266,7 +282,7 @@ export function AppSidebar() {
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {mainNavItems.map(item => {
+                {visibleMainNavItems.map(item => {
                   const showChatBadge = item.title === 'Chat' && chatUnreadCount > 0;
                   return (
                     <SidebarMenuItem key={item.title}>

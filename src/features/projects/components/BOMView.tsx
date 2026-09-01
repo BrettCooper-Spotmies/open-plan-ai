@@ -1,15 +1,17 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
-  CheckCircle, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download, ExternalLink,
-  FileSpreadsheet, PenLine, Trash2, Eye,
+  CheckCircle, CheckCircle2, Clock, DollarSign, ChevronRight, ChevronDown, Hash, X, User, Plus, Check, Download, ExternalLink,
+  FileSpreadsheet, PenLine, Trash2, Eye, Sparkles,
+  Sheet as SheetIcon, ArrowDownToLine, ArrowUpFromLine, Unlink, ArrowLeftRight, RotateCcw,
+  Ruler, Factory, Truck, Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { useBomTree, useCreateBomNode, useDecideApprovalRequest, useDeleteBomNode, useAddRequirement, useProjectApprovalRequests } from '@/hooks/useBom';
-import { useCreatePart } from '@/hooks/useParts';
+import { useCreatePart, useUpdatePart } from '@/hooks/useParts';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useAuth } from '@/contexts/AuthContext';
 import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
@@ -18,17 +20,40 @@ import { downloadBomCsv } from '@/features/reports/utils/exportUtils';
 import { createBomWorkbook, downloadExcelFile } from '@/utils/excelExport';
 import type { BOMApprovalRequest } from './bomData';
 
-async function saveBomDocs(nodeId: string, payload: BOMPartPayload) {
-  const docs = [payload.docPhoto, ...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])].filter(Boolean) as DocValue[];
-  await Promise.allSettled(
-    docs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName ?? undefined)),
+// Returns the uploaded/linked photo's resolved fileUrl (for persisting onto the
+// part catalog row so Inventory can show it) — undefined when the photo wasn't
+// touched, null when the user explicitly removed it.
+async function saveBomDocs(nodeId: string, payload: BOMPartPayload): Promise<{ photoUrl?: string | null }> {
+  const otherDocs = [...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])].filter(Boolean) as DocValue[];
+  const uploads = Promise.allSettled(
+    otherDocs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName ?? undefined)),
   );
+
+  let photoUrl: string | null | undefined;
+  if (payload.docPhoto === null) {
+    photoUrl = null;
+  } else if (payload.docPhoto?.kind === 'file') {
+    const attachment = await uploadBomDocumentFile(nodeId, payload.docPhoto.file);
+    photoUrl = attachment.fileUrl;
+  } else if (payload.docPhoto?.kind === 'url') {
+    await addBomDocumentLink(nodeId, payload.docPhoto.url, payload.docPhoto.fileName);
+    photoUrl = payload.docPhoto.url;
+  }
+
+  await uploads;
+  return { photoUrl };
 }
 
-// New parts can only be added as 'approved' or 'pending' (see BOMPartSheet's
+// New parts can only be added as 'approved' or 'draft' (see BOMPartSheet's
 // add-mode status toggle); narrow to what useCreateBomNode's DTO accepts.
 function toNodeStatus(status: BOMStatus): 'approved' | 'pending' | 'draft' {
   return status === 'rejected' ? 'pending' : status;
+}
+
+// The Part's initial revision has no 'draft'/'rejected' state — only the BOM
+// node does (see toNodeStatus above). Narrow to what createPart's DTO accepts.
+function toInitialRevisionStatus(status: BOMStatus): 'approved' | 'pending' {
+  return status === 'approved' ? 'approved' : 'pending';
 }
 
 function softTint(hex: string, alpha: number): string {
@@ -62,10 +87,11 @@ function OwnerBadge({ name, size = 'sm' }: { name: string; size?: 'sm' | 'xs' })
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import {
   BOMNode, BOMFilters, BOMStatus, EMPTY_FILTERS,
-  getCategoryMeta,
+  getCategoryMeta, leadTimeValueToDays,
   bomFlatAll, bomFlatten, bomFind,
   bomFilterTree, bomFlattenInclude, bomTypeOf,
   fromApiNode, applyPriceRollup, assignLevelLabels, formatLeadTime,
@@ -77,7 +103,242 @@ import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMRejectDialog } from './BOMRejectDialog';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
+import { ImportBomDialog } from '../../bom-import/ImportBomDialog';
+import { NewBuildDialog, type NewBuildInput } from './NewBuildDialog';
+import { useCreateInventoryBuild, useInventoryBuilds } from '@/hooks/useInventory';
+import type { BuildDef } from './inventoryData';
+import BOMGoogleSheetsLinkDialog from './BOMGoogleSheetsLinkDialog';
+import BOMGoogleSheetsPullDialog from './BOMGoogleSheetsPullDialog';
+import BOMGoogleSheetsPushDialog from './BOMGoogleSheetsPushDialog';
+import { useGoogleSheetsLinkStatus, useUnlinkGoogleSheet } from '@/hooks/useGoogleSheets';
+import type { GoogleSheetsLinkStatus } from '@/services/googleSheets.service';
 import { useCurrency } from '@/hooks/useCurrency';
+
+import { LOGO_PATHS } from '@/features/integrations/logoPaths';
+
+function GoogleSheetsLogo({ className = 'w-3.5 h-3.5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden="true">
+      <path d={LOGO_PATHS.googleSheets} />
+    </svg>
+  );
+}
+
+// ── Google Sheets toolbar menu ────────────────────────────────────
+// Single entry point for managing this project's Google Sheets sync from
+// the BOM toolbar: Pull, Push, view the linked sheet, relink, or disconnect.
+// Hidden entirely unless the org has connected Google Sheets from Integrations.
+function GoogleSheetsToolbarMenu({
+  projectId,
+  linkStatus,
+  onPull,
+  onPush,
+  onManage,
+  compact = false,
+}: {
+  projectId: string;
+  linkStatus: GoogleSheetsLinkStatus | undefined;
+  onPull: () => void;
+  onPush: () => void;
+  onManage: () => void;
+  compact?: boolean;
+}) {
+  const unlinkSheet = useUnlinkGoogleSheet(projectId);
+
+  if (!linkStatus?.orgConnected) return null;
+  const isLinked = !!linkStatus.linked;
+
+  // When unlinked, clicking directly opens the "Link a Google Sheet" dialog as in design
+  if (!isLinked) {
+    if (compact) {
+      return (
+        <button
+          type="button"
+          title="Link a Sheet"
+          onClick={onManage}
+          className="relative w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-card text-foreground hover:bg-muted transition-colors shrink-0"
+        >
+          <GoogleSheetsLogo className="w-4 h-4 text-muted-foreground" />
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        onClick={onManage}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-card text-foreground hover:bg-muted cursor-pointer transition-colors"
+      >
+        <GoogleSheetsLogo className="w-3.5 h-3.5 text-muted-foreground" />
+        Sheets
+      </button>
+    );
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        {compact ? (
+          <button
+            title="Sheets"
+            className="relative w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-card text-foreground hover:bg-muted transition-colors shrink-0"
+          >
+            <GoogleSheetsLogo className="w-4 h-4 text-muted-foreground" />
+          </button>
+        ) : (
+          <button className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-border bg-card text-foreground hover:bg-muted cursor-pointer transition-colors shadow-xs">
+            <GoogleSheetsLogo className="w-3.5 h-3.5 text-muted-foreground" />
+            Sheets
+            <ChevronDown className="w-3 h-3 text-muted-foreground -mr-0.5" />
+          </button>
+        )}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-80 p-4 rounded-2xl shadow-xl border border-border bg-card">
+        <div className="space-y-3">
+          <div className="flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-foreground leading-tight">
+                Synced with Google Sheets
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                Tab "{linkStatus.sheetTabName || 'BOM Export'}"
+              </p>
+              <p className="text-[11px] text-muted-foreground/80 mt-0.5">
+                Last pulled just now
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mt-3.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs font-medium rounded-lg border-border hover:bg-muted/80"
+              onClick={onPull}
+            >
+              <ArrowDownToLine className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" /> Pull
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs font-medium rounded-lg border-border hover:bg-muted/80"
+              onClick={onPush}
+            >
+              <ArrowUpFromLine className="w-3.5 h-3.5 mr-1.5 text-muted-foreground" /> Push
+            </Button>
+          </div>
+
+          <div className="mt-3 pt-2.5 border-t border-border/60 space-y-1">
+            <button
+              type="button"
+              className="w-full flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors py-1 px-0.5 text-left rounded cursor-pointer"
+              onClick={onManage}
+            >
+              <ArrowLeftRight className="w-3.5 h-3.5 shrink-0" />
+              <span>Change linked sheet</span>
+            </button>
+            <button
+              type="button"
+              className="w-full flex items-center gap-2 text-xs text-destructive hover:text-destructive/80 transition-colors py-1 px-0.5 text-left rounded cursor-pointer"
+              onClick={() => unlinkSheet.mutate()}
+              disabled={unlinkSheet.isPending}
+            >
+              <Unlink className="w-3.5 h-3.5 shrink-0" />
+              <span>Disconnect sheet</span>
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+// ── New Build toolbar menu ────────────────────────────────────────
+// Mirrors GoogleSheetsToolbarMenu's popover pattern: the toolbar button opens
+// a panel listing every build already created for this project, plus an
+// "Add a build" action that opens NewBuildDialog.
+function NewBuildToolbarMenu({
+  builds,
+  onSelectBuild,
+  onAddBuild,
+  compact = false,
+}: {
+  builds: BuildDef[];
+  onSelectBuild: (buildId: string) => void;
+  onAddBuild: () => void;
+  compact?: boolean;
+}) {
+  const statusTint: Record<BuildDef['status'], string> = {
+    planned: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
+    allocated: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    kitted: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        {compact ? (
+          <button
+            type="button"
+            title="Builds"
+            className="relative w-8 h-8 flex items-center justify-center rounded-md border bg-card text-foreground border-border hover:bg-muted transition-colors shrink-0"
+          >
+            <Layers className="w-4 h-4" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border bg-card text-foreground border-border hover:bg-muted cursor-pointer transition-colors"
+          >
+            <Layers className="w-3.5 h-3.5" />
+            Builds
+            <ChevronDown className="w-3 h-3 text-muted-foreground -mr-0.5" />
+          </button>
+        )}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-72 p-3 rounded-2xl shadow-xl border border-border bg-card">
+        <div className="space-y-2">
+          <div className="text-xs font-semibold text-foreground px-1">
+            Builds{builds.length > 0 && <span className="text-muted-foreground font-normal"> ({builds.length})</span>}
+          </div>
+          <div className="max-h-56 overflow-y-auto space-y-0.5">
+            {builds.length === 0 ? (
+              <div className="text-xs text-muted-foreground px-1 py-3 text-center">
+                No builds yet for this project
+              </div>
+            ) : (
+              builds.map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  onClick={() => onSelectBuild(b.id)}
+                  className="w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg text-left hover:bg-muted transition-colors cursor-pointer"
+                >
+                  <span className="text-xs font-medium text-foreground truncate">{b.name}</span>
+                  <span className={cn('text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 capitalize', statusTint[b.status])}>
+                    {b.status}
+                  </span>
+                </button>
+              ))
+            )}
+          </div>
+          <div className="pt-2 border-t border-border/60">
+            <button
+              type="button"
+              onClick={onAddBuild}
+              className="w-full flex items-center justify-center gap-2 text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors py-1.5 px-1 rounded-lg cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              Add a build
+            </button>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 // ── Skeletons ──────────────────────────────────────────────────────
 function StatCardSkeleton() {
@@ -94,7 +355,7 @@ function StatCardSkeleton() {
 
 function ListRowSkeleton({ level = 0 }: { level?: number }) {
   return (
-    <div className="flex items-center px-6 border-b border-border" style={{ minWidth: 1200, height: 46 }}>
+    <div className="flex items-center px-6 border-b border-border" style={{ minWidth: 1320, height: 46 }}>
       <div style={{ flexBasis: 74, flexShrink: 0 }} className="flex items-center">
         <Skeleton className="h-3 w-6" style={{ marginLeft: level * 16 }} />
       </div>
@@ -108,6 +369,7 @@ function ListRowSkeleton({ level = 0 }: { level?: number }) {
       <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2 flex justify-end"><Skeleton className="h-3.5 w-6" /></div>
       <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-8" /></div>
       <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-20" /></div>
+      <div style={{ flexBasis: 120, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-14" /></div>
       <div style={{ flexBasis: 90, flexShrink: 0 }} className="px-2 flex justify-end"><Skeleton className="h-3.5 w-14" /></div>
       <div style={{ flexBasis: 74, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-10" /></div>
       <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2"><Skeleton className="h-5 w-8 rounded" /></div>
@@ -174,7 +436,7 @@ function BOMViewSkeleton() {
       {/* Table skeleton — desktop/tablet only */}
       <div className="hidden md:flex md:flex-col md:flex-1 overflow-hidden">
         {/* Table header — real so column names are visible */}
-        <div className="flex items-center px-6 border-b border-t border-border bg-muted/40" style={{ minWidth: 1200 }}>
+        <div className="flex items-center px-6 border-b border-t border-border bg-muted/40" style={{ minWidth: 1320 }}>
           {HEADERS.map((c, i) => (
             <div key={c.key}
               style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
@@ -185,7 +447,7 @@ function BOMViewSkeleton() {
             </div>
           ))}
         </div>
-        <div className="flex-1 overflow-hidden border-t-0" style={{ minWidth: 1200 }}>
+        <div className="flex-1 overflow-hidden border-t-0" style={{ minWidth: 1320 }}>
           {SKELETON_LEVELS.map((level, i) => <ListRowSkeleton key={i} level={level} />)}
         </div>
       </div>
@@ -221,10 +483,20 @@ function StatCard({ label, value, icon: Icon, iconColor, accent }: {
 }
 
 // ── Filter drawer ──────────────────────────────────────────────────
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, icon: Icon, count, children }: {
+  title: string; icon?: React.ElementType; count?: number; children: React.ReactNode;
+}) {
   return (
-    <div className="px-4 py-4 border-b border-border">
-      <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2.5">{title}</div>
+    <div className="mx-3 my-2.5 rounded-lg border border-border/70 bg-muted/20 p-3">
+      <div className="flex items-center gap-1.5 mb-2.5">
+        {Icon && <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground flex-1">{title}</span>
+        {!!count && (
+          <span className="text-[10px] font-semibold text-primary bg-primary/10 rounded-full min-w-[16px] h-4 px-1 flex items-center justify-center leading-none">
+            {count}
+          </span>
+        )}
+      </div>
       {children}
     </div>
   );
@@ -234,8 +506,9 @@ function Chip({ active, onClick, children }: { active: boolean; onClick: () => v
   return (
     <button
       onClick={onClick}
+      title={typeof children === 'string' ? children : undefined}
       className={cn(
-        'px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer whitespace-nowrap border transition-colors',
+        'px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border transition-colors max-w-[190px] truncate',
         active
           ? 'bg-primary/10 text-primary border-primary/30'
           : 'bg-card text-muted-foreground border-border hover:bg-muted'
@@ -265,7 +538,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
   open: boolean; filters: BOMFilters;
   setFilters: React.Dispatch<React.SetStateAction<BOMFilters>>;
   onClose: () => void;
-  facets: { units: string[]; manufacturers: string[]; suppliers: string[]; owners: string[] };
+  facets: { units: string[]; manufacturers: string[]; suppliers: string[]; owners: string[]; categories: string[] };
   currencySymbol: string;
 }) {
   const [draft, setDraft] = useState<BOMFilters>({ ...filters });
@@ -281,7 +554,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
   if (!open) return null;
 
-  const toggle = (key: 'units' | 'suppliers' | 'manufacturers' | 'statuses' | 'owners', val: string) =>
+  const toggle = (key: 'units' | 'suppliers' | 'manufacturers' | 'statuses' | 'owners' | 'categories', val: string) =>
     setDraft(f => ({
       ...f,
       [key]: (f[key] as string[]).includes(val)
@@ -316,15 +589,28 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
   };
 
 
+  const draftCount =
+    (draft.bomType !== 'all' ? 1 : 0) + draft.statuses.length + draft.units.length +
+    draft.manufacturers.length + draft.suppliers.length + draft.owners.length +
+    draft.categories.length +
+    (draft.priceMin || draft.priceMax ? 1 : 0) +
+    (draft.leadOp !== 'any' && draft.leadValue ? 1 : 0) +
+    (draft.mpn ? 1 : 0);
+
   return (
     <>
       <div className="fixed inset-0 bg-black/50 z-[60]" />
-      <div className="fixed top-0 right-0 bottom-0 w-[352px] bg-card border-l border-border z-[61] flex flex-col shadow-xl">
+      <div className="fixed top-0 right-0 bottom-0 w-[380px] max-w-full bg-card border-l border-border z-[61] flex flex-col shadow-xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3.5 border-b border-border">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-muted-foreground" />
             <span className="text-sm font-semibold text-foreground">Filters</span>
+            {!!draftCount && (
+              <span className="text-[10px] font-semibold text-primary-foreground bg-primary rounded-full min-w-[18px] h-[18px] px-1 flex items-center justify-center leading-none">
+                {draftCount}
+              </span>
+            )}
           </div>
           <button onClick={onClose}
             className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
@@ -332,8 +618,8 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
-          <Section title="Type of BOM">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden py-1">
+          <Section title="Type of BOM" icon={Layers}>
             <div className="flex bg-muted border border-border rounded-lg p-0.5 gap-0.5">
               {([['all', 'All BOM'], ['top', 'Top Level'], ['catalog', 'Catalog']] as const).map(([id, label]) => (
                 <button key={id} onClick={() => set('bomType', id)}
@@ -345,7 +631,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             </div>
           </Section>
 
-          <Section title="Status">
+          <Section title="Status" icon={CheckCircle2} count={draft.statuses.length}>
             <div className="flex gap-2 flex-wrap">
               {(['approved', 'pending', 'rejected'] as const).map(s => (
                 <Chip key={s} active={draft.statuses.includes(s)} onClick={() => toggle('statuses', s)}>
@@ -355,7 +641,35 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             </div>
           </Section>
 
-          <Section title={`Unit Price (${currencySymbol})`}>
+          <Section title="Category" icon={Tag} count={draft.categories.length}>
+            <div className="flex gap-2 flex-wrap">
+              {facets.categories.map(c => {
+                const meta = getCategoryMeta(c);
+                const active = draft.categories.includes(c);
+                return (
+                  <button
+                    key={c}
+                    onClick={() => toggle('categories', c)}
+                    title={meta.label}
+                    className={cn(
+                      'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border transition-colors max-w-[190px]',
+                      active
+                        ? 'bg-primary/10 text-primary border-primary/30'
+                        : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                    )}
+                  >
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: meta.tint }} />
+                    <span className="truncate">{meta.label}</span>
+                  </button>
+                );
+              })}
+              {!facets.categories.length && (
+                <span className="text-xs text-muted-foreground">No categories yet</span>
+              )}
+            </div>
+          </Section>
+
+          <Section title={`Unit Price (${currencySymbol})`} icon={DollarSign} count={draft.priceMin || draft.priceMax ? 1 : 0}>
             <div className="flex items-center gap-2">
               <RangeInput value={draft.priceMin} onChange={v => set('priceMin', v)} placeholder="Min" prefix={currencySymbol} />
               <span className="text-muted-foreground text-xs">–</span>
@@ -363,21 +677,43 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             </div>
           </Section>
 
-          <Section title="Lead Time (days)">
-            <div className="flex items-center gap-2">
-              <RangeInput value={draft.leadMin} onChange={v => set('leadMin', v)} placeholder="Min" />
-              <span className="text-muted-foreground text-xs">–</span>
-              <RangeInput value={draft.leadMax} onChange={v => set('leadMax', v)} placeholder="Max" />
+          <Section title="Lead Time" icon={Clock} count={draft.leadOp !== 'any' && draft.leadValue ? 1 : 0}>
+            <div className="flex bg-muted border border-border rounded-lg p-0.5 gap-0.5 mb-2.5">
+              {([['any', 'Any'], ['lt', 'Less than'], ['gt', 'Greater than'], ['eq', 'Exactly']] as const).map(([id, label]) => (
+                <button key={id} onClick={() => set('leadOp', id)}
+                  className={cn('flex-1 py-1.5 rounded-md text-[10.5px] font-medium cursor-pointer border-none transition-colors whitespace-nowrap',
+                    draft.leadOp === id ? 'bg-foreground text-background' : 'bg-transparent text-muted-foreground hover:text-foreground')}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className={cn('flex items-center gap-2 transition-opacity', draft.leadOp === 'any' && 'opacity-40 pointer-events-none')}>
+              <div className="flex items-center gap-1.5 bg-muted border border-border rounded-md px-2.5 py-1.5 flex-1 min-w-0">
+                <input
+                  type="number" value={draft.leadValue} onChange={e => set('leadValue', e.target.value)}
+                  onWheel={e => e.currentTarget.blur()} placeholder="e.g. 10"
+                  className="bg-transparent border-none outline-none text-foreground text-xs w-full"
+                />
+              </div>
+              <select
+                value={draft.leadUnit}
+                onChange={e => set('leadUnit', e.target.value as BOMFilters['leadUnit'])}
+                className="bg-muted border border-border rounded-md px-2 py-1.5 text-xs text-foreground outline-none cursor-pointer shrink-0"
+              >
+                <option value="days">Days</option>
+                <option value="weeks">Weeks</option>
+                <option value="months">Months</option>
+              </select>
             </div>
           </Section>
 
-          <Section title="Units (UOM)">
+          <Section title="Units (UOM)" icon={Ruler} count={draft.units.length}>
             <div className="flex gap-2 flex-wrap">
               {facets.units.map(u => <Chip key={u} active={draft.units.includes(u)} onClick={() => toggle('units', u)}>{u}</Chip>)}
             </div>
           </Section>
 
-          <Section title="Manufacturer">
+          <Section title="Manufacturer" icon={Factory} count={draft.manufacturers.length}>
             <div className="flex gap-2 flex-wrap">
               {[...facets.manufacturers, ...customMfrs.filter(c => !facets.manufacturers.includes(c))].map(m => (
                 <Chip key={m} active={draft.manufacturers.includes(m)} onClick={() => toggle('manufacturers', m)}>{m}</Chip>
@@ -405,7 +741,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             </div>
           </Section>
 
-          <Section title="Supplier / Distributor">
+          <Section title="Supplier / Distributor" icon={Truck} count={draft.suppliers.length}>
             <div className="flex gap-2 flex-wrap">
               {[...facets.suppliers, ...customSuppliers.filter(c => !facets.suppliers.includes(c))].map(s => (
                 <Chip key={s} active={draft.suppliers.includes(s)} onClick={() => toggle('suppliers', s)}>{s}</Chip>
@@ -433,7 +769,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             </div>
           </Section>
 
-          <Section title="Owner / Handled By">
+          <Section title="Owner / Handled By" icon={User} count={draft.owners.length}>
             <div className="flex gap-2 flex-wrap">
               {facets.owners.map(o => (
                 <Chip key={o} active={draft.owners.includes(o)} onClick={() => toggle('owners', o)}>
@@ -449,7 +785,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             </div>
           </Section>
 
-          <Section title="Manufacturer Part Number (MPN)">
+          <Section title="Manufacturer Part Number (MPN)" icon={Hash} count={draft.mpn ? 1 : 0}>
             <div className="flex items-center gap-2 bg-muted border border-border rounded-md px-2.5 py-1.5">
               <Hash className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
               <input
@@ -461,9 +797,11 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
           </Section>
         </div>
 
-        <div className="flex gap-2.5 px-4 py-3.5 border-t border-border">
+        <div className="flex gap-2.5 px-4 py-3.5 border-t border-border bg-card">
           <Button variant="outline" className="flex-1" onClick={() => { setDraft({ ...EMPTY_FILTERS }); setFilters({ ...EMPTY_FILTERS }); onClose(); }}>Clear all</Button>
-          <Button className="flex-1" onClick={() => { setFilters(draft); onClose(); }}>Show results</Button>
+          <Button className="flex-1" onClick={() => { setFilters(draft); onClose(); }}>
+            Show results{!!draftCount && ` (${draftCount})`}
+          </Button>
         </div>
       </div>
     </>
@@ -477,6 +815,7 @@ const HEADERS = [
   { key: 'qty', label: 'Qty', w: 50 },
   { key: 'uom', label: 'UOM', w: 50 },
   { key: 'mfr', label: 'Manufacturer', w: 140 },
+  { key: 'avail', label: 'Available', w: 120 },
   { key: 'price', label: 'Unit Price', w: 90 },
   { key: 'lead', label: 'Lead', w: 74 },
   { key: 'rev', label: 'Rev', w: 50 },
@@ -510,7 +849,7 @@ function ListView({
   return (
     <div className="hidden md:block flex-1 overflow-y-auto overflow-x-auto border-t border-border">
       {/* Header */}
-      <div className="flex items-center px-6 border-b border-border bg-background sticky top-0 z-10" style={{ minWidth: 1200 }}>
+      <div className="flex items-center px-6 border-b border-border bg-background sticky top-0 z-10" style={{ minWidth: 1320 }}>
         {HEADERS.map((c, i) => (
           <div key={c.key}
             style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
@@ -524,7 +863,7 @@ function ListView({
       </div>
 
       {/* Rows */}
-      <div style={{ minWidth: 1200 }}>
+      <div style={{ minWidth: 1320 }}>
         {rows.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
             <Search className="w-7 h-7 mx-auto mb-3 opacity-30" />
@@ -585,6 +924,16 @@ function ListView({
               <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground">{row.uom}</div>
               {/* Manufacturer */}
               <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground truncate">{row.manufacturer}</div>
+              {/* Available */}
+              <div style={{ flexBasis: 120, flexShrink: 0 }} className="px-2 text-xs truncate" title={row.available === null ? 'This part is not in the inventory' : undefined}>
+                {row.available === null ? (
+                  <span className="text-muted-foreground/60 italic">Not in inventory</span>
+                ) : (
+                  <span className={cn('font-medium tabular-nums', row.available <= 0 ? 'text-destructive' : 'text-foreground')}>
+                    {row.available} {row.uom}
+                  </span>
+                )}
+              </div>
               {/* Price */}
               <div style={{ flexBasis: 90, flexShrink: 0 }} className="px-2 text-sm text-foreground text-right tabular-nums">{formatCurrency(row.price)}</div>
               {/* Lead */}
@@ -648,7 +997,7 @@ function ListView({
 
       {/* Footer */}
       {rows.length > 0 && (
-        <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground" style={{ minWidth: 1200 }}>
+        <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground" style={{ minWidth: 1320 }}>
           <span>Showing {rows.length} of {totalCount} total parts</span>
           <span>Last updated 23-Apr-2026 · Rev C approved by Engineering</span>
         </div>
@@ -660,9 +1009,9 @@ function ListView({
 // ── Mobile-only status pill (short label, matches the mobile design spec) ──
 const MOBILE_STATUS_STYLE: Record<BOMStatus, { bg: string; color: string; label: string }> = {
   approved: { bg: 'rgba(34,197,94,0.12)', color: '#16A34A', label: 'Approved' },
-  pending:  { bg: 'rgba(245,158,11,0.14)', color: '#D97706', label: 'Pending' },
+  pending: { bg: 'rgba(245,158,11,0.14)', color: '#D97706', label: 'Pending' },
   rejected: { bg: 'rgba(220,38,38,0.12)', color: '#DC2626', label: 'Rejected' },
-  draft:    { bg: 'rgba(100,116,139,0.12)', color: '#64748B', label: 'Draft' },
+  draft: { bg: 'rgba(100,116,139,0.12)', color: '#64748B', label: 'Draft' },
 };
 function MobileStatusPill({ status }: { status: BOMStatus }) {
   const s = MOBILE_STATUS_STYLE[status];
@@ -934,6 +1283,14 @@ export function BOMView({
   const [addChoiceOpen, setAddChoiceOpen] = useState(false);
   const [addManualOpen, setAddManualOpen] = useState(false);
   const [addImportOpen, setAddImportOpen] = useState(false);
+  const [addAiImportOpen, setAddAiImportOpen] = useState(false);
+  // Google Sheets — link status backs both the Add Part chooser card and the
+  // toolbar's manage menu (Pull/Push/relink/disconnect). Only visible once
+  // the org has connected from Integrations.
+  const { data: sheetsLinkStatus } = useGoogleSheetsLinkStatus(projectId);
+  const [sheetsLinkOpen, setSheetsLinkOpen] = useState(false);
+  const [sheetsPullOpen, setSheetsPullOpen] = useState(false);
+  const [sheetsPushOpen, setSheetsPushOpen] = useState(false);
   const [addSubNode, setAddSubNode] = useState<BOMNode | null>(null);
   const [createSubNode, setCreateSubNode] = useState<BOMNode | null>(null);
   const [importSubNode, setImportSubNode] = useState<BOMNode | null>(null);
@@ -947,18 +1304,26 @@ export function BOMView({
     prevAddOpen.current = addOpen;
   }, [addOpen]);
   const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'approved' | 'pending' | 'rejected'>('all');
   const [rejectTarget, setRejectTarget] = useState<BOMNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BOMNode | null>(null);
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
   const [filterOpen, setFilterOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [filters, setFilters] = useState<BOMFilters>({ ...EMPTY_FILTERS });
+  // The toolbar's All/Approved/Pending/Rejected quick-tab is a single-select shortcut
+  // over the same status filter the drawer's Status chips edit — it reads/writes
+  // filters.statuses directly instead of keeping its own state, so the two controls
+  // can never disagree (e.g. tab="Approved" + drawer chip="Pending" would otherwise
+  // AND together into an always-empty result with no indication why).
+  const filterStatus: 'all' | BOMStatus = filters.statuses.length === 1 ? filters.statuses[0] : 'all';
+  const setFilterStatus = (id: 'all' | BOMStatus) =>
+    setFilters(f => ({ ...f, statuses: id === 'all' ? [] : [id] }));
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem('bom_expanded');
     if (saved) { try { return JSON.parse(saved); } catch { /* ignore */ } }
     return {};
   });
+  const [newBuildOpen, setNewBuildOpen] = useState(false);
 
   const { formatCurrency, currencySymbol } = useCurrency();
 
@@ -967,11 +1332,34 @@ export function BOMView({
   const { data: project } = useProjectDetail(projectId);
   const { user } = useAuth();
   const createPart = useCreatePart(orgId);
+  const updatePart = useUpdatePart();
   const createNode = useCreateBomNode(projectId);
   const decideApprovalRequest = useDecideApprovalRequest(projectId);
   const deleteBomNode = useDeleteBomNode(projectId);
   const addRequirement = useAddRequirement(projectId);
   const { data: pendingApprovalRequests = [] } = useProjectApprovalRequests(projectId, 'pending');
+  const createBuildMutation = useCreateInventoryBuild(orgId);
+  const { data: orgBuilds = [] } = useInventoryBuilds(orgId);
+  const projectBuilds = useMemo(() => orgBuilds.filter(b => b.projectId === projectId), [orgBuilds, projectId]);
+  const navigate = useNavigate();
+  const handleSelectBuild = (buildId: string) => navigate(`/inventory?tab=builds&buildId=${buildId}`);
+
+  const handleAddBuild = (input: NewBuildInput) => {
+    createBuildMutation.mutate({
+      name: input.name,
+      type: input.type,
+      units: input.units,
+      bomRev: input.bomRev,
+      scrapPct: input.scrapPct,
+      milestone: input.milestone,
+      targetDate: input.targetDate,
+      projectId: input.projectId,
+      assigneeId: input.assigneeId,
+    }, {
+      onSuccess: () => toast.success(`${input.name} created`),
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to create build'),
+    });
+  };
 
   const projectRole = (project?.myRole || '').toLowerCase();
   const isAdmin = projectRole === 'admin';
@@ -1049,6 +1437,17 @@ export function BOMView({
 
   const allNodes = useMemo(() => bomFlatAll(rootNodes), [rootNodes]);
 
+  // Force a set of node ids open — used after a bulk import so newly-created
+  // sub-components aren't hidden behind a collapsed parent row.
+  const expandNodes = (ids: string[]) => {
+    setExpanded(prev => {
+      const next = { ...prev };
+      ids.forEach(id => { next[id] = true; });
+      localStorage.setItem('bom_expanded', JSON.stringify(next));
+      return next;
+    });
+  };
+
   const toggle = (id: string) => {
     setExpanded(prev => {
       const next = { ...prev, [id]: !prev[id] };
@@ -1063,29 +1462,33 @@ export function BOMView({
   const handleAddPart = async (payload: BOMPartPayload) => {
     try {
       const part = await createPart.mutateAsync({
-        partNumber:          payload.pn,
-        name:                payload.name,
-        description:         payload.desc,
-        category:            payload.category,
-        manufacturer:        payload.manufacturer || undefined,
-        distributor:         payload.distributor  || undefined,
-        mpn:                 payload.mpn          || undefined,
-        unit:                payload.uom,
-        initialStatus:       payload.status,
-        initialRev:          payload.rev,
-        initialPrice:        payload.price > 0 ? payload.price : undefined,
+        partNumber: payload.pn,
+        name: payload.name,
+        description: payload.desc,
+        category: payload.category,
+        manufacturer: payload.manufacturer || undefined,
+        distributor: payload.distributor || undefined,
+        mpn: payload.mpn || undefined,
+        unit: payload.uom,
+        initialStatus: toInitialRevisionStatus(payload.status),
+        initialRev: payload.rev,
+        initialPrice: payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers:    payload.suppliers?.length ? payload.suppliers : undefined,
+        initialSuppliers: payload.suppliers?.length ? payload.suppliers : undefined,
+        // Additional Fields from the form — dropped here until now, so anything
+        // typed into that section vanished the moment the part was created.
+        customFields: payload.customFields?.length ? payload.customFields : undefined,
       });
       const node = await createNode.mutateAsync({
-        partId:   part.id,
+        partId: part.id,
         quantity: payload.qty,
-        unit:     payload.uom,
-        status:   toNodeStatus(payload.status),
-        ownerId:  payload.ownerId ?? null,
+        unit: payload.uom,
+        status: toNodeStatus(payload.status),
+        ownerId: payload.ownerId ?? null,
       });
       // Upload any documents attached in the form
-      await saveBomDocs(node.id, payload);
+      const { photoUrl } = await saveBomDocs(node.id, payload);
+      if (photoUrl) await updatePart.mutateAsync({ partId: part.id, dto: { imageUrl: photoUrl } });
       // Link any requirements added in the Traceability tab
       await Promise.all(payload.req.map(requirementId => addRequirement.mutateAsync({ nodeId: node.id, requirementId })));
       toast.success('Part added to BOM');
@@ -1103,29 +1506,33 @@ export function BOMView({
     if (!createSubNode) return;
     try {
       const part = await createPart.mutateAsync({
-        partNumber:          payload.pn,
-        name:                payload.name,
-        description:         payload.desc,
-        category:            payload.category,
-        manufacturer:        payload.manufacturer || undefined,
-        distributor:         payload.distributor  || undefined,
-        mpn:                 payload.mpn          || undefined,
-        unit:                payload.uom,
-        initialStatus:       payload.status,
-        initialRev:          payload.rev,
-        initialPrice:        payload.price > 0 ? payload.price : undefined,
+        partNumber: payload.pn,
+        name: payload.name,
+        description: payload.desc,
+        category: payload.category,
+        manufacturer: payload.manufacturer || undefined,
+        distributor: payload.distributor || undefined,
+        mpn: payload.mpn || undefined,
+        unit: payload.uom,
+        initialStatus: toInitialRevisionStatus(payload.status),
+        initialRev: payload.rev,
+        initialPrice: payload.price > 0 ? payload.price : undefined,
         initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers:    payload.suppliers?.length ? payload.suppliers : undefined,
+        initialSuppliers: payload.suppliers?.length ? payload.suppliers : undefined,
+        // Additional Fields from the form — dropped here until now, so anything
+        // typed into that section vanished the moment the part was created.
+        customFields: payload.customFields?.length ? payload.customFields : undefined,
       });
       const node = await createNode.mutateAsync({
-        partId:   part.id,
+        partId: part.id,
         quantity: payload.qty,
-        unit:     payload.uom,
-        status:   toNodeStatus(payload.status),
+        unit: payload.uom,
+        status: toNodeStatus(payload.status),
         parentId: createSubNode.id,
-        ownerId:  payload.ownerId ?? null,
+        ownerId: payload.ownerId ?? null,
       });
-      await saveBomDocs(node.id, payload);
+      const { photoUrl } = await saveBomDocs(node.id, payload);
+      if (photoUrl) await updatePart.mutateAsync({ partId: part.id, dto: { imageUrl: photoUrl } });
       await Promise.all(payload.req.map(requirementId => addRequirement.mutateAsync({ nodeId: node.id, requirementId })));
       setCreateSubNode(null);
     } catch {
@@ -1187,37 +1594,44 @@ export function BOMView({
     manufacturers: [...new Set(allNodes.map(n => n.manufacturer))].sort(),
     suppliers: [...new Set(allNodes.map(n => n.distributor))].sort(),
     owners: [...new Set(allNodes.map(n => n.owner))].sort(),
+    categories: [...new Set(allNodes.map(n => n.cat))].sort(),
   }), [allNodes]);
 
   const activeCount =
     (filters.bomType !== 'all' ? 1 : 0) + filters.statuses.length + filters.units.length +
     filters.manufacturers.length + filters.suppliers.length + filters.owners.length +
+    filters.categories.length +
     (filters.priceMin || filters.priceMax ? 1 : 0) +
-    (filters.leadMin || filters.leadMax ? 1 : 0) +
+    (filters.leadOp !== 'any' && filters.leadValue ? 1 : 0) +
     (filters.mpn ? 1 : 0);
 
   const pred = useCallback((row: BOMNode) => {
     const q = search.toLowerCase();
     if (q && !(row.pn.toLowerCase().includes(q) || row.name.toLowerCase().includes(q) || row.desc.toLowerCase().includes(q) ||
       row.manufacturer.toLowerCase().includes(q) || row.mpn.toLowerCase().includes(q))) return false;
-    if (filterStatus !== 'all' && row.status !== filterStatus) return false;
     if (filters.statuses.length && !filters.statuses.includes(row.status)) return false;
     if (filters.units.length && !filters.units.includes(row.uom)) return false;
     if (filters.manufacturers.length && !filters.manufacturers.includes(row.manufacturer)) return false;
     if (filters.suppliers.length && !filters.suppliers.includes(row.distributor)) return false;
     if (filters.owners.length && !filters.owners.includes(row.owner)) return false;
+    if (filters.categories.length && !filters.categories.includes(row.cat)) return false;
     if (filters.bomType !== 'all' && bomTypeOf(row) !== filters.bomType) return false;
     if (filters.mpn && !row.mpn.toLowerCase().includes(filters.mpn.toLowerCase())) return false;
     const pMin = parseFloat(filters.priceMin), pMax = parseFloat(filters.priceMax);
     if (!isNaN(pMin) && row.price < pMin) return false;
     if (!isNaN(pMax) && row.price > pMax) return false;
-    const lMin = parseFloat(filters.leadMin), lMax = parseFloat(filters.leadMax);
-    if (!isNaN(lMin) && row.leadTime < lMin) return false;
-    if (!isNaN(lMax) && row.leadTime > lMax) return false;
+    if (filters.leadOp !== 'any' && filters.leadValue) {
+      const lVal = leadTimeValueToDays(parseFloat(filters.leadValue), filters.leadUnit);
+      if (!isNaN(lVal)) {
+        if (filters.leadOp === 'lt' && !(row.leadTime < lVal)) return false;
+        if (filters.leadOp === 'gt' && !(row.leadTime > lVal)) return false;
+        if (filters.leadOp === 'eq' && row.leadTime !== lVal) return false;
+      }
+    }
     return true;
-  }, [search, filterStatus, filters]);
+  }, [search, filters]);
 
-  const filtersActive = !!search || filterStatus !== 'all' || activeCount > 0;
+  const filtersActive = !!search || activeCount > 0;
 
   const listRows = useMemo(() => {
     if (!filtersActive) return bomFlatten(rootNodes, expanded);
@@ -1227,10 +1641,10 @@ export function BOMView({
 
   const gridRows = useMemo(() => allNodes.filter(pred), [allNodes, pred]);
 
-  const totalCount    = bomTree?.totalNodes    ?? allNodes.length;
+  const totalCount = bomTree?.totalNodes ?? allNodes.length;
   const approvedCount = bomTree?.approvedCount ?? allNodes.filter(n => n.status === 'approved').length;
-  const pendingCount  = bomTree?.pendingCount  ?? allNodes.filter(n => n.status === 'pending').length;
-  const totalCost     = useMemo(() => rootNodes.reduce((s, n) => s + n.price * n.qty, 0), [rootNodes]);
+  const pendingCount = bomTree?.pendingCount ?? allNodes.filter(n => n.status === 'pending').length;
+  const totalCost = useMemo(() => rootNodes.reduce((s, n) => s + n.price * n.qty, 0), [rootNodes]);
 
   if (treeLoading) return <BOMViewSkeleton />;
 
@@ -1242,7 +1656,14 @@ export function BOMView({
     // (the row still exists, just deleted) but never appear in the live tree.
     // Part number is the one thing guaranteed unique among *live* parts, so it
     // is the most reliable fallback once the id-based lookups come up empty.
-    const node = (selected && bomFind(selected, rootNodes))
+    const selectedNode = selected ? bomFind(selected, rootNodes) : null;
+    // bomNodeId and partId are captured together as a pair (e.g. by an ECO's
+    // affected-parts snapshot) and should agree. A node id can still resolve
+    // in the live tree yet have since been reassigned to a different part —
+    // trust it only when the two actually match, otherwise fall through to
+    // resolving by the part id/number directly so a stale node id can't
+    // silently surface the wrong part.
+    const node = (selectedNode && (!fallbackPartId || selectedNode._partId === fallbackPartId) ? selectedNode : null)
       || (fallbackPartId ? allNodes.find(n => n._partId === fallbackPartId) ?? null : null)
       || (fallbackPn ? allNodes.find(n => n.pn === fallbackPn) ?? null : null);
     if (node) return (
@@ -1329,6 +1750,22 @@ export function BOMView({
           <Tab id="rejected" label="Rejected" />
 
           <div className="flex-1" />
+
+          {/* Google Sheets — Pull/Push/manage the linked spreadsheet */}
+          <GoogleSheetsToolbarMenu
+            projectId={projectId}
+            linkStatus={sheetsLinkStatus}
+            onPull={() => setSheetsPullOpen(true)}
+            onPush={() => setSheetsPushOpen(true)}
+            onManage={() => setSheetsLinkOpen(true)}
+          />
+
+          {/* Builds — lists this project's builds, with an "Add a build" action */}
+          <NewBuildToolbarMenu
+            builds={projectBuilds}
+            onSelectBuild={handleSelectBuild}
+            onAddBuild={() => setNewBuildOpen(true)}
+          />
 
           {/* Export dropdown */}
           <DropdownMenu>
@@ -1421,6 +1858,24 @@ export function BOMView({
               </DropdownMenu>
 
               <div className="flex-1" />
+
+              {/* Google Sheets — Pull/Push/manage the linked spreadsheet */}
+              <GoogleSheetsToolbarMenu
+                projectId={projectId}
+                linkStatus={sheetsLinkStatus}
+                onPull={() => setSheetsPullOpen(true)}
+                onPush={() => setSheetsPushOpen(true)}
+                onManage={() => setSheetsLinkOpen(true)}
+                compact
+              />
+
+              {/* Builds — lists this project's builds, with an "Add a build" action */}
+              <NewBuildToolbarMenu
+                builds={projectBuilds}
+                onSelectBuild={handleSelectBuild}
+                onAddBuild={() => setNewBuildOpen(true)}
+                compact
+              />
 
               {/* Export */}
               <DropdownMenu>
@@ -1526,6 +1981,15 @@ export function BOMView({
         currencySymbol={currencySymbol}
       />
 
+      {/* New Build — project is locked to this BOM's project */}
+      <NewBuildDialog
+        isOpen={newBuildOpen}
+        onClose={() => setNewBuildOpen(false)}
+        onAddBuild={handleAddBuild}
+        projects={[{ id: projectId, name: project?.name ?? 'This project' }]}
+        lockedProjectId={projectId}
+      />
+
       {/* Add Part — choice dialog */}
       <Dialog open={addChoiceOpen} onOpenChange={v => { if (!v) { setAddChoiceOpen(false); onAddClose?.(); } }}>
         <DialogContent className="sm:max-w-[440px] p-0 gap-0 overflow-hidden">
@@ -1562,6 +2026,40 @@ export function BOMView({
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
             </button>
+            <button
+              onClick={() => { setAddChoiceOpen(false); setAddAiImportOpen(true); }}
+              className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-foreground/20 transition-colors text-left group"
+            >
+              <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-purple-500/10 text-purple-600">
+                <Sparkles className="w-4 h-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-foreground">Import with AI</div>
+                <div className="text-xs text-muted-foreground mt-0.5">Upload a file, review with AI chat, then commit — supports multi-level hierarchies.</div>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+            </button>
+            {/* Only shown when Google Sheets is connected at org level but NOT yet linked for this project */}
+            {sheetsLinkStatus?.orgConnected && !sheetsLinkStatus?.linked && (
+              <button
+                onClick={() => {
+                  setAddChoiceOpen(false);
+                  setSheetsLinkOpen(true);
+                }}
+                className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-foreground/20 transition-colors text-left group"
+              >
+                <span className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-blue-500/10 text-blue-600">
+                  <SheetIcon className="w-4 h-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-foreground">Import from Google Sheets</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Link a spreadsheet, then pull parts from it.
+                  </div>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
+              </button>
+            )}
           </div>
           <div className="px-4 pb-4 flex justify-end">
             <Button variant="outline" size="sm" onClick={() => { setAddChoiceOpen(false); onAddClose?.(); }}>Cancel</Button>
@@ -1586,8 +2084,43 @@ export function BOMView({
           onClose={() => { setAddImportOpen(false); onAddClose?.(); }}
           projectId={projectId}
           orgId={orgId}
+          rootNodes={rootNodes}
+          onImported={expandNodes}
         />
       )}
+
+      {/* Add Part — import with AI (top-level, no parent) */}
+      {addAiImportOpen && (
+        <ImportBomDialog
+          open={addAiImportOpen}
+          onClose={() => { setAddAiImportOpen(false); onAddClose?.(); }}
+          projectId={projectId}
+        />
+      )}
+
+      {/* Add Part — import from Google Sheets (top-level, no parent) */}
+      <BOMGoogleSheetsLinkDialog
+        open={sheetsLinkOpen}
+        onClose={() => { setSheetsLinkOpen(false); onAddClose?.(); }}
+        projectId={projectId}
+        linkStatus={sheetsLinkStatus}
+        // A fresh link is only useful once the sheet's rows are actually in
+        // the BOM, so linking chains straight into Pull. onAddClose is not
+        // called here on purpose — when this came from the Add Part chooser
+        // the flow is still running, and Pull's own onClose ends it.
+        onLinked={() => { setSheetsLinkOpen(false); setSheetsPullOpen(true); }}
+      />
+      <BOMGoogleSheetsPullDialog
+        open={sheetsPullOpen}
+        onClose={() => { setSheetsPullOpen(false); onAddClose?.(); }}
+        projectId={projectId}
+      />
+      {/* Push — only reachable from the toolbar's manage menu, not the Add Part flow */}
+      <BOMGoogleSheetsPushDialog
+        open={sheetsPushOpen}
+        onClose={() => setSheetsPushOpen(false)}
+        projectId={projectId}
+      />
 
       {/* Add Sub-component dialog (from list row "+" action) */}
       {addSubNode && (
@@ -1609,6 +2142,7 @@ export function BOMView({
           open={!!createSubNode}
           onClose={() => setCreateSubNode(null)}
           onSave={handleAddSubcomponent}
+          isSubPart
         />
       )}
 
@@ -1620,6 +2154,7 @@ export function BOMView({
           parentNode={importSubNode}
           projectId={projectId}
           orgId={orgId}
+          onImported={expandNodes}
         />
       )}
 
@@ -1640,6 +2175,7 @@ export function BOMView({
         confirmText={deleteTarget && bomFlatAll(deleteTarget.children ?? []).length > 0 ? 'Delete All' : 'Delete Part'}
         {...(deleteTarget ? describeDeleteImpact(deleteTarget) : { title: '', description: '' })}
       />
+
     </div>
   );
 }

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FolderPlus, Paperclip, Sparkles } from 'lucide-react';
+import { FolderPlus, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useProjects } from '@/hooks/useProjects';
@@ -15,13 +14,19 @@ import {
   ASSISTANT_CATEGORIES,
   ASSISTANT_SUGGESTIONS,
   buildAskSuggestions,
+  buildActSuggestions,
   scopeLabelToBackend,
+  resolveConversationScopeLabel,
+  type AssistantCategoryId,
   type AssistantScope,
-  type AssistantFocusEntity,
   type AiMessageAttachment,
 } from '../assistantData';
 import { isMessageTooLargeError, MESSAGE_TOO_LARGE_NOTICE, useAssistantConversation } from '../hooks/useAssistantConversation';
-import { useCreateAssistantConversation } from '../hooks/useAssistantConversations';
+import {
+  useAssistantConversations,
+  useCreateAssistantConversation,
+  useUpdateAssistantConversation,
+} from '../hooks/useAssistantConversations';
 import { EMPTY_ASSISTANT_DRAFT, EMPTY_ASSISTANT_FILES, useAssistantDraftStore } from '../stores/useAssistantDraftStore';
 
 interface AssistantPanelProps {
@@ -51,15 +56,17 @@ export function AssistantPanel({
   const clearDraft = useAssistantDraftStore((s) => s.clearDraft);
   const clearDraftMessage = useAssistantDraftStore((s) => s.clearDraftMessage);
   const setDraftFiles = useAssistantDraftStore((s) => s.setFiles);
-  const { value, scope, selectedProjectId, focusEntities } = draft;
+  const { value, scope, selectedProjectId } = draft;
   const setValue = (next: string) => setDraft(draftKey, { value: next });
   const setScope = (next: AssistantScope) => setDraft(draftKey, { scope: next });
   const setSelectedProjectId = (next: string | null) => setDraft(draftKey, { selectedProjectId: next });
-  const setFocusEntities = (next: AssistantFocusEntity[]) => setDraft(draftKey, { focusEntities: next });
   const [justSubmitted, setJustSubmitted] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const dragCounterRef = useRef(0);
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   const {
     messages,
@@ -69,6 +76,13 @@ export function AssistantPanel({
     toolStatus,
     pendingQuestions,
     liveCard,
+    proposalsByMessageId,
+    confirmProposal,
+    rejectProposal,
+    reviseProposal,
+    confirmingProposalId,
+    rejectingProposalId,
+    revisingProposalId,
     sendMessage,
     editMessage,
     selectMessageVersion,
@@ -78,6 +92,86 @@ export function AssistantPanel({
     isSending,
   } = useAssistantConversation(conversationId);
   const createConversation = useCreateAssistantConversation();
+  const updateConversation = useUpdateAssistantConversation();
+  // Once a conversation has actually resolved to a single project — either
+  // picked at creation, or auto-locked by assistantLoop.ts the moment a
+  // message named one — its scope/project is fixed server-side and the
+  // composer should show that real, locked value instead of the still-live
+  // "new chat" draft picker, which would otherwise look interactive despite
+  // being ignored on send (see handleSend below). A conversation still sitting
+  // in all_projects (nothing project-specific asked yet) is deliberately
+  // EXCLUDED here — it keeps the normal interactive picker below, both so the
+  // user can jump straight to a project and so a plain "hi" doesn't
+  // prematurely freeze the control before the assistant has actually scoped
+  // anything. Same cache useAssistantConversations()/AppHeader already keep
+  // warm, so this is free.
+  const { data: allConversations = [] } = useAssistantConversations();
+  const activeConversationSummary = conversationId
+    ? allConversations.find((c) => c?.id === conversationId)
+    : undefined;
+  const isActiveConversationLocked =
+    !!activeConversationSummary && activeConversationSummary.scope !== 'all_projects';
+  const lockedScopeLabel = isActiveConversationLocked
+    ? resolveConversationScopeLabel(
+        activeConversationSummary!.scope,
+        projects.find((p) => p.id === activeConversationSummary!.projectId)?.name,
+      )
+    : null;
+  // Conversation title + scope, shown inline as a card at the top of the
+  // transcript (page variant only) instead of floating in the global
+  // AppHeader — keeps it scoped to the Assistant page's own content instead
+  // of bleeding into shared chrome.
+  const activeConversationTitle = activeConversationSummary?.title || 'New conversation';
+  const activeConversationScopeLabel = activeConversationSummary
+    ? resolveConversationScopeLabel(
+        activeConversationSummary.scope,
+        projects.find((p) => p.id === activeConversationSummary.projectId)?.name,
+      )
+    : null;
+
+  // Click-to-rename on the title itself (vs. the sidebar's dialog-based
+  // rename) — closes/resets whenever the open conversation changes so a
+  // stale draft can't leak into the next thread.
+  useEffect(() => {
+    setIsEditingTitle(false);
+  }, [conversationId]);
+
+  useEffect(() => {
+    if (isEditingTitle) titleInputRef.current?.select();
+  }, [isEditingTitle]);
+
+  const startEditingTitle = () => {
+    if (!activeConversationSummary) return;
+    setTitleDraft(activeConversationSummary.title || '');
+    setIsEditingTitle(true);
+  };
+
+  const commitTitleEdit = () => {
+    const next = titleDraft.trim();
+    setIsEditingTitle(false);
+    if (!activeConversationSummary || !next || next === activeConversationSummary.title) return;
+    updateConversation.mutate(
+      { id: activeConversationSummary.id, updates: { title: next } },
+      { onError: () => toast.error("Couldn't rename this conversation — try again.") },
+    );
+  };
+  // Picking a project from the popover on an existing, still-unscoped
+  // (all_projects) conversation locks it server-side right away — the
+  // explicit-click counterpart to assistantLoop.ts's automatic lock, which
+  // fires the instant a message names a project instead. Only relevant once
+  // conversationId exists; before that, the popover's pick just feeds the
+  // "new chat" draft that createConversation reads on first send (unchanged
+  // below).
+  const handleProjectChange = (projectId: string) => {
+    if (conversationId) {
+      updateConversation.mutate(
+        { id: conversationId, updates: { projectId } },
+        { onError: () => toast.error("Couldn't lock this conversation to that project — try again.") },
+      );
+      return;
+    }
+    setSelectedProjectId(projectId);
+  };
   // Covers only the very first message of a brand-new conversation: sent
   // before conversationId exists, so useAssistantConversation's own
   // optimistic-message tracking (keyed on an already-active conversation)
@@ -93,11 +187,63 @@ export function AssistantPanel({
     }
   }, [pendingFirstMessage, messages.length]);
 
+  // Composer-side turn state (the Stop button, the "thinking" indicator that
+  // rides on justSubmitted, the optimistic first-message bubble) all belong to
+  // the thread we're leaving — clear them when switching threads so the next
+  // one doesn't open with a stuck Stop button over a turn that isn't its own.
+  // Deliberately skipped on the null -> new-id hop right after a conversation
+  // is created (prev === null): pendingFirstMessage still has to bridge that
+  // gap until the created thread's first fetch lands.
+  const prevConversationIdRef = useRef(conversationId);
+  useEffect(() => {
+    const prev = prevConversationIdRef.current;
+    prevConversationIdRef.current = conversationId;
+    if (prev !== null && prev !== conversationId) {
+      setJustSubmitted(false);
+      setPendingFirstMessage(null);
+      setPendingFirstAttachments(null);
+    }
+  }, [conversationId]);
+
   const firstName = user?.name?.split(' ')[0] || 'there';
   const isWidget = variant === 'widget';
   const hasActiveConversation = !!conversationId;
   const visibleCategories = ASSISTANT_CATEGORIES.filter((category) => !category.hidden);
   const askSuggestions = useMemo(() => buildAskSuggestions(projects), [projects]);
+  const actSuggestions = useMemo(() => buildActSuggestions(projects), [projects]);
+  // Categories whose chips are generated from the org's real projects (vs. ASSISTANT_SUGGESTIONS' static
+  // 'build' entries) — both need the same "no projects yet" empty state instead of an empty chip list.
+  const dynamicSuggestionsByCategory: Partial<Record<AssistantCategoryId, typeof askSuggestions>> = {
+    ask: askSuggestions,
+    act: actSuggestions,
+  };
+  // Flattened into one ChatGPT-style chip row instead of per-category
+  // labelled lists — interleaved so Ask/Act are mixed rather than all of one
+  // kind first, and capped so the empty state stays a couple of lines, not a
+  // wall of chips.
+  const emptyStateSuggestions = useMemo(() => {
+    const groups = visibleCategories.map((category) => {
+      const isDynamic = category.id in dynamicSuggestionsByCategory;
+      const items = isDynamic
+        ? dynamicSuggestionsByCategory[category.id] ?? []
+        : ASSISTANT_SUGGESTIONS.filter((s) => s.category === category.id);
+      return items;
+    });
+    const interleaved: typeof askSuggestions = [];
+    const maxLen = Math.max(0, ...groups.map((g) => g.length));
+    for (let i = 0; i < maxLen; i++) {
+      for (const group of groups) {
+        if (group[i]) interleaved.push(group[i]);
+      }
+    }
+    return interleaved.slice(0, isWidget ? 4 : 6);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [askSuggestions, actSuggestions, isWidget]);
+  // Any visible category backed by real projects (ask/act) needs the org to
+  // have projects at all — when it doesn't, show one empty-state message
+  // instead of duplicating it once per category.
+  const needsProjectsEmptyState =
+    !projectsLoading && projects.length === 0 && visibleCategories.some((c) => c.id in dynamicSuggestionsByCategory);
 
   useEffect(() => {
     // isStreaming flipping true is the normal path (a successful send started
@@ -166,7 +312,6 @@ export function AssistantPanel({
         projectId: scope !== 'All projects' ? (selectedProjectId as string) : undefined,
         orgId: scope === 'All projects' ? currentOrganization?.id : undefined,
         message: effectiveMessage,
-        focusEntities: focusEntities.length > 0 ? focusEntities : undefined,
         attachments,
       },
       {
@@ -276,6 +421,29 @@ export function AssistantPanel({
       ]
     : messages;
 
+  // Rendered both centered in the empty state and docked at the bottom once
+  // a conversation has messages — same instance, just repositioned, so it
+  // never actually mounts twice.
+  const composer = (
+    <AssistantComposer
+      value={value}
+      onChange={setValue}
+      files={files}
+      onFilesAdd={handleFilesAdd}
+      onFileRemove={handleFileRemove}
+      scope={scope}
+      onScopeChange={setScope}
+      projects={projects}
+      selectedProjectId={selectedProjectId}
+      onProjectChange={handleProjectChange}
+      lockedScopeLabel={lockedScopeLabel}
+      onSend={handleSend}
+      disabled={isComposerInputDisabled}
+      isGenerating={canStop}
+      onStop={handleStop}
+    />
+  );
+
   return (
     <div
       className={cn('relative flex h-full min-h-0 flex-col', className)}
@@ -293,110 +461,133 @@ export function AssistantPanel({
         </div>
       )}
       {hasActiveConversation ? (
-        <AssistantTranscript
-          key={conversationId ?? 'new'}
-          messages={transcriptMessages}
-          messageVersions={messageVersions}
-          onEditMessage={editMessage}
-          onSelectVersion={selectMessageVersion}
-          streamingText={streamingText}
-          isStreaming={effectivelyStreaming}
-          toolStatus={toolStatus}
-          pendingQuestions={pendingQuestions}
-          onAnswer={answerQuestion}
-          isAnswering={isAnswering}
-          liveCard={liveCard}
-          onSendMessage={sendMessage}
-        />
-      ) : (
-        <ScrollArea className="flex-1 min-h-0">
-          <div className={cn('mx-auto flex flex-col gap-6', isWidget ? 'max-w-full p-4' : 'max-w-3xl p-4 md:p-6')}>
-            <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-                <Sparkles className="h-5 w-5" />
-              </div>
-              <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-foreground">OpenPlan Assistant</h2>
-                <p className="text-sm text-muted-foreground">
-                  Hi {firstName} — <span className="font-semibold text-foreground">ask</span> me anything about
-                  status, blockers, BOM health, or changes across OpenPlan.
-                </p>
+        <div className="relative flex flex-1 min-h-0 flex-col">
+          {/* Overlays the top of the scrollable transcript rather than sitting
+              in normal flow, so messages scrolling past underneath fade out
+              under the gradient instead of getting clipped by a hard edge. */}
+          {!isWidget && activeConversationSummary && (
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 isolate z-10 px-4 pb-8 pt-2 md:px-6 [transform:translateZ(0)]"
+              style={{
+                background:
+                  'linear-gradient(to bottom, hsl(var(--background)) 55%, hsl(var(--background) / 0) 100%)',
+              }}
+            >
+              <div className="pointer-events-auto mx-auto flex max-w-3xl items-center gap-2">
+                {isEditingTitle ? (
+                  <input
+                    ref={titleInputRef}
+                    value={titleDraft}
+                    onChange={(e) => setTitleDraft(e.target.value)}
+                    onBlur={commitTitleEdit}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        commitTitleEdit();
+                      } else if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setIsEditingTitle(false);
+                      }
+                    }}
+                    size={Math.max(titleDraft.length, 4)}
+                    className="min-w-0 max-w-full rounded-md border border-ring bg-background px-1.5 py-0.5 text-sm font-semibold leading-tight text-foreground outline-none ring-2 ring-ring/30"
+                  />
+                ) : (
+                  <h1
+                    role="button"
+                    tabIndex={0}
+                    onClick={startEditingTitle}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        startEditingTitle();
+                      }
+                    }}
+                    className="min-w-0 max-w-full truncate rounded-md border border-transparent px-1.5 py-0.5 text-sm font-semibold leading-tight text-foreground"
+                  >
+                    {activeConversationTitle}
+                  </h1>
+                )}
+                {activeConversationScopeLabel && (
+                  <span className="shrink-0 truncate rounded-lg border border-border bg-muted/40 px-2 py-1 text-xs text-muted-foreground">
+                    {activeConversationScopeLabel}
+                  </span>
+                )}
               </div>
             </div>
-
-            <div className={cn('grid gap-3', isWidget ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-3')}>
-              {visibleCategories.map((category) => (
-                <div key={category.id} className="rounded-xl border border-border p-4">
-                  <div className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold text-chart-1">
-                    <category.icon className="h-4 w-4" />
-                    {category.title}
-                  </div>
-                  <p className="text-xs leading-relaxed text-muted-foreground">{category.description}</p>
-                </div>
-              ))}
-            </div>
-
-            {visibleCategories.map((category) => {
-              if (category.id === 'ask' && !projectsLoading && projects.length === 0) {
-                return (
-                  <div key={category.id} className="space-y-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      {category.label}
-                    </p>
-                    <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-muted/20 px-3.5 py-6 text-center">
-                      <FolderPlus className="h-5 w-5 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Add some projects to start chatting about them.</p>
-                    </div>
-                  </div>
-                );
-              }
-              const suggestions =
-                category.id === 'ask' ? askSuggestions : ASSISTANT_SUGGESTIONS.filter((s) => s.category === category.id);
-              if (suggestions.length === 0) return null;
-              return (
-                <div key={category.id} className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {category.label}
-                  </p>
-                  <div className="space-y-2">
-                    {suggestions.map((suggestion) => (
-                      <AssistantSuggestionRow key={suggestion.id} suggestion={suggestion} onSelect={setValue} />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </ScrollArea>
-      )}
-
-      <div
-        className={cn(
-          'shrink-0 border-t border-border',
-          isWidget ? 'p-3' : 'px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-6 md:py-4',
-        )}
-      >
-        <div className={cn('mx-auto', isWidget ? 'max-w-full' : 'max-w-3xl')}>
-          <AssistantComposer
-            value={value}
-            onChange={setValue}
-            files={files}
-            onFilesAdd={handleFilesAdd}
-            onFileRemove={handleFileRemove}
-            scope={scope}
-            onScopeChange={setScope}
-            projects={projects}
-            selectedProjectId={selectedProjectId}
-            onProjectChange={setSelectedProjectId}
-            focusEntities={focusEntities}
-            onFocusEntitiesChange={setFocusEntities}
-            onSend={handleSend}
-            disabled={isComposerInputDisabled}
-            isGenerating={canStop}
-            onStop={handleStop}
+          )}
+          <AssistantTranscript
+            key={conversationId ?? 'new'}
+            messages={transcriptMessages}
+            messageVersions={messageVersions}
+            onEditMessage={editMessage}
+            onSelectVersion={selectMessageVersion}
+            streamingText={streamingText}
+            isStreaming={effectivelyStreaming}
+            toolStatus={toolStatus}
+            pendingQuestions={pendingQuestions}
+            onAnswer={answerQuestion}
+            isAnswering={isAnswering}
+            liveCard={liveCard}
+            onSendMessage={sendMessage}
+            proposalsByMessageId={proposalsByMessageId}
+            onConfirmProposal={confirmProposal}
+            onRejectProposal={rejectProposal}
+            onReviseProposal={reviseProposal}
+            confirmingProposalId={confirmingProposalId}
+            rejectingProposalId={rejectingProposalId}
+            revisingProposalId={revisingProposalId}
+            withHeaderOffset={!isWidget && !!activeConversationSummary}
           />
         </div>
-      </div>
+      ) : (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div
+            className={cn(
+              'mx-auto flex min-h-full flex-col items-center justify-center gap-5',
+              isWidget ? 'max-w-full p-4' : 'max-w-2xl p-4 md:p-6',
+            )}
+          >
+            <h1 className={cn('text-center font-semibold text-foreground', isWidget ? 'text-base' : 'text-2xl sm:text-[28px]')}>
+              {isWidget ? (
+                <>How can I help, {firstName}?</>
+              ) : visibleCategories.length > 1 ? (
+                <>What can I help with, {firstName}?</>
+              ) : (
+                <>What do you want to know, {firstName}?</>
+              )}
+            </h1>
+
+            <div className="w-full">{composer}</div>
+
+            {needsProjectsEmptyState ? (
+              <div className="flex flex-col items-center gap-2 px-3.5 py-4 text-center">
+                <FolderPlus className="h-5 w-5 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Add some projects to get started.</p>
+              </div>
+            ) : (
+              emptyStateSuggestions.length > 0 && (
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  {emptyStateSuggestions.map((suggestion) => (
+                    <AssistantSuggestionRow key={suggestion.id} suggestion={suggestion} onSelect={setValue} />
+                  ))}
+                </div>
+              )
+            )}
+          </div>
+        </div>
+      )}
+
+      {hasActiveConversation && (
+        <div
+          className={cn(
+            'shrink-0 border-t border-border',
+            isWidget ? 'p-3' : 'px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:px-6 md:py-4',
+          )}
+        >
+          <div className={cn('mx-auto', isWidget ? 'max-w-full' : 'max-w-3xl')}>{composer}</div>
+        </div>
+      )}
     </div>
   );
 }

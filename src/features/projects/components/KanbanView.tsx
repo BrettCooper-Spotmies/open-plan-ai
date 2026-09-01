@@ -15,7 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ColorSwatchPicker } from '@/components/shared/ColorSwatchPicker';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn, getDisplayId } from '@/lib/utils';
 import { playCompleteSound } from '@/lib/playSound';
 import { BUCKET_COLOR_OPTIONS } from '@/lib/bucketColors';
 import { Plus, Check, GripVertical, Link2, Calendar as CalendarIcon, Maximize2, MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
@@ -124,6 +124,7 @@ interface KanbanViewProps {
   modules?: { id: string; name: string; type: ModuleType }[];
   milestones?: Milestone[];
   projectId?: string;
+  projectCode?: string;
   onAddModule?: () => void;
 }
 
@@ -176,6 +177,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
   modules = [],
   milestones = [],
   projectId,
+  projectCode,
   onAddModule,
 }: KanbanViewProps) {
   const isMobile = useIsMobile();
@@ -669,7 +671,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                 {...provided.droppableProps}
                                 data-kanban-column-id={column.id}
                                 className={cn(
-                                  'space-y-2 min-h-[120px] h-full p-2 rounded-lg transition-colors',
+                                  'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors flex-1 overflow-y-auto',
                                   snapshot.isDraggingOver
                                     ? 'bg-muted/50'
                                     : 'bg-muted/30'
@@ -705,34 +707,34 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
 
                                                 <div className="space-y-2">
                                                   <div className="flex items-start justify-between gap-2">
-                                                    <div className="relative flex flex-1 items-start min-w-0 overflow-hidden">
+                                                    <div className="flex flex-1 items-start gap-2 min-w-0">
                                                       {isDependenciesColumn ? (
-                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                        <div className="shrink-0 mt-0.5 flex items-center justify-center w-4 h-4">
                                                           <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
                                                             <Link2 className="h-3 w-3 text-status-blocked" />
                                                           </div>
                                                         </div>
                                                       ) : isBlocked ? (
-                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                        <div className="shrink-0 mt-0.5 flex items-center justify-center w-4 h-4">
                                                           <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
                                                             <Link2 className="h-3 w-3 text-status-blocked" />
                                                           </div>
                                                         </div>
                                                       ) : isBlockingOthers ? (
-                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                        <div className="shrink-0 mt-0.5 flex items-center justify-center w-4 h-4">
                                                           <div className="h-4 w-4 rounded-full bg-status-blocked/15 flex items-center justify-center">
                                                             <Link2 className="h-3 w-3 text-status-blocked" />
                                                           </div>
                                                         </div>
                                                       ) : task.status === 'done' ? (
-                                                        <div className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4">
+                                                        <div className="shrink-0 mt-0.5 flex items-center justify-center w-4 h-4">
                                                           <div className="h-4 w-4 rounded-full bg-status-done/20 flex items-center justify-center">
                                                             <Check className="h-3 w-3 text-green-500" />
                                                           </div>
                                                         </div>
                                                       ) : (
                                                         <div
-                                                          className="absolute left-0 top-0 z-10 flex items-center justify-center w-4 h-4"
+                                                          className="shrink-0 mt-0.5 flex items-center justify-center w-4 h-4"
                                                         >
                                                           <button
                                                             onClick={(e) => {
@@ -748,11 +750,16 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                                                           </button>
                                                         </div>
                                                       )}
-                                                      <h4
-                                                        className="text-sm font-medium leading-tight truncate translate-x-6"
-                                                      >
-                                                        {task.title}
-                                                      </h4>
+                                                      <div className="min-w-0">
+                                                        {getDisplayId(projectCode, 'T', task.number) && (
+                                                          <span className="font-mono font-semibold text-[10px] text-blue-500 block">
+                                                            {getDisplayId(projectCode, 'T', task.number)}
+                                                          </span>
+                                                        )}
+                                                        <h4 className="text-sm font-medium leading-tight line-clamp-2">
+                                                          {task.title}
+                                                        </h4>
+                                                      </div>
                                                     </div>
                                                     <Badge
                                                       variant="secondary"
@@ -1005,10 +1012,8 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
                               {addTaskButton}
                             </div>
 
-                            {/* Tasks Droppable - scrollable area */}
-                            <div className="flex-1 overflow-y-auto min-h-0">
-                              {cardsDroppable}
-                            </div>
+                            {/* Tasks Droppable - itself the scrollable area */}
+                            {cardsDroppable}
                           </div>
                         );
                       }}
@@ -1126,6 +1131,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         modules={modules}
         milestones={milestones}
         projectId={projectId}
+        projectCode={projectCode}
         onAddModule={onAddModule}
         assignableMembers={assignableMembers}
         statusOptions={taskModalStatusOptions}
@@ -1154,6 +1160,7 @@ export function KanbanView({ tasks: initialTasks, allTasks, issues = [], assigna
         modules={modules}
         milestones={milestones}
         projectId={projectId}
+        projectCode={projectCode}
         onAddModule={onAddModule}
         assignableMembers={assignableMembers}
         statusOptions={taskModalStatusOptions}

@@ -33,11 +33,23 @@ interface MessageInputProps {
   members?: ConversationMember[];
   isGroup?: boolean;
   sendMessage?: (content: string, type?: 'text' | 'file', fileData?: any, replyToMessageId?: string, entityTags?: EntityTagRef[]) => Promise<void>;
+  sendFileMessage?: (file: File, caption?: string, replyToMessageId?: string) => Promise<void>;
+  /** Two-phase upload: placeholder insertion is synchronous so every tile in a
+   *  multi-file batch appears instantly, independent of upload/network order. */
+  createFileMessagePlaceholder?: (file: File, caption?: string, replyToMessageId?: string) => { tempId: string; localUrl: string; optimisticMsg: ChatMessage } | null;
+  uploadFileMessagePlaceholder?: (placeholder: { tempId: string; localUrl: string; optimisticMsg: ChatMessage }, file: File, caption?: string, replyToMessageId?: string) => Promise<void>;
   readOnly?: boolean;
   readOnlyNotice?: string | null;
   replyingTo?: ChatMessage | null;
   onCancelReply?: () => void;
 }
+
+// Keep in sync with the `max-h-[140px]` on the textarea and its highlight overlay.
+const MAX_TEXTAREA_HEIGHT = 140;
+// The two gutters between the control groups and the textarea: `gap-1.5` (6px)
+// on mobile, `gap-1` (4px) on desktop.
+const CONTROL_GAPS_MOBILE = 12;
+const CONTROL_GAPS_DESKTOP = 8;
 
 const MAX_CHARS = 4000;
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB per file
@@ -185,13 +197,18 @@ function buildFileContent(payload: {
   };
 }
 
-export function MessageInput({ conversationId, onMessageSent, onTyping, members, isGroup = false, sendMessage, readOnly = false, readOnlyNotice = null, replyingTo = null, onCancelReply }: MessageInputProps) {
+export function MessageInput({ conversationId, onMessageSent, onTyping, members, isGroup = false, sendMessage, sendFileMessage: sendFileMessageProp, createFileMessagePlaceholder: createPlaceholderProp, uploadFileMessagePlaceholder: uploadPlaceholderProp, readOnly = false, readOnlyNotice = null, replyingTo = null, onCancelReply }: MessageInputProps) {
   const isMobile = useIsMobile();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const mentionOverlayRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
+  const leftControlsRef = useRef<HTMLDivElement>(null);
+  const rightControlsRef = useRef<HTMLDivElement>(null);
+  // Desktop composer: controls sit inline beside a one-line textarea, and only
+  // drop to their own row once the text actually wraps.
+  const [isStacked, setIsStacked] = useState(false);
 
   const setDraft = useChatStore((s) => s.setDraft);
   const value = useChatStore((s) => s.draftMessages[conversationId] || '');
@@ -455,10 +472,49 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
   const resize = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
+    // Measure with overflow off so a visible scrollbar can't change the wrap
+    // and feed back into the next measurement.
+    el.style.overflowY = 'hidden';
     el.style.height = 'auto';
-    el.style.height = Math.min(el.scrollHeight, 144) + 'px';
-    if (mentionOverlayRef.current) mentionOverlayRef.current.scrollTop = el.scrollTop;
-  }, []);
+    let fullHeight = el.scrollHeight;
+
+    // The controls sit beside the textarea until the text wraps, then drop to
+    // their own row underneath. That decision is made from how the text wraps
+    // at the *inline* width — the width the textarea has with the controls
+    // beside it. Judging it at the current width would oscillate, because
+    // stacking widens the textarea, which can pull the text back onto one line,
+    // which would immediately un-stack it and re-wrap it.
+    let inlineHeight = fullHeight;
+    if (isStacked) {
+      const controls =
+        (leftControlsRef.current?.offsetWidth ?? 0) +
+        (rightControlsRef.current?.offsetWidth ?? 0) +
+        (isMobile ? CONTROL_GAPS_MOBILE : CONTROL_GAPS_DESKTOP);
+      el.style.width = Math.max(0, el.offsetWidth - controls) + 'px';
+      el.style.height = 'auto';
+      inlineHeight = el.scrollHeight;
+      el.style.width = '';
+      el.style.height = 'auto';
+      fullHeight = el.scrollHeight;
+    }
+    const lineHeight = parseFloat(getComputedStyle(el).lineHeight) || 20;
+    setIsStacked(inlineHeight > lineHeight * 1.5);
+
+    const height = Math.min(fullHeight, MAX_TEXTAREA_HEIGHT);
+    el.style.height = height + 'px';
+    // Past the cap the box stops growing, so the textarea has to scroll itself —
+    // otherwise the overflow is simply unreachable.
+    el.style.overflowY = fullHeight > MAX_TEXTAREA_HEIGHT ? 'auto' : 'hidden';
+    const overlay = mentionOverlayRef.current;
+    if (overlay) {
+      // The @mention highlight layer sits behind the transparent text, so it has
+      // to be the exact same box — same height and same scrollbar gutter — or the
+      // highlights drift off the words they belong to once the text scrolls.
+      overlay.style.height = height + 'px';
+      overlay.style.overflowY = el.style.overflowY;
+      overlay.scrollTop = el.scrollTop;
+    }
+  }, [isMobile, isStacked]);
 
   const syncOverlayScroll = useCallback(() => {
     if (textareaRef.current && mentionOverlayRef.current) {
@@ -650,7 +706,10 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     addFiles(e.dataTransfer.files);
   };
 
-  const sendFileMessage = async (file: File, caption?: string) => {
+  // Fallback for contexts where the caller didn't wire up the optimistic
+  // sendFileMessage from useMessages (no instant placeholder in that case —
+  // the message only appears once the socket event / response comes back).
+  const sendFileMessageFallback = async (file: File, caption?: string) => {
     const formData = new FormData();
     formData.append('file', file);
     if (caption) formData.append('caption', caption);
@@ -672,7 +731,13 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       return;
     }
 
+    // Capture and clear both the text and the attached files together, right
+    // now — otherwise the text (driven by the draft store) disappears
+    // instantly while the image previews linger until every upload finishes,
+    // making one combined send look like it split into two.
+    const filesToSend = pendingFiles;
     setDraft(conversationId, '');
+    setPendingFiles([]);
     setMentionQuery(null);
     cancelSlash();
 
@@ -680,14 +745,15 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     if (!isOnline) {
       try {
         if (trimmed) await enqueueText(conversationId, trimmed);
-        if (pendingFiles.length > 0) {
-          await Promise.all(pendingFiles.map((file) => enqueueFile(conversationId, file)));
+        if (filesToSend.length > 0) {
+          await Promise.all(filesToSend.map((file) => enqueueFile(conversationId, file)));
         }
-        setPendingFiles([]);
         toast.info('📵 Saved offline — will send when you reconnect');
       } catch (err) {
         logger.error('[MessageInput] Offline queue failed:', err);
         toast.error('Failed to save message offline. Please try again.');
+        setDraft(conversationId, trimmed);
+        setPendingFiles(filesToSend);
       }
       return;
     }
@@ -696,15 +762,52 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
     const tagsToSend = pendingEntityTags;
     setIsSending(true);
     try {
-      if (pendingFiles.length > 0) {
-        if (trimmed || tagsToSend.length > 0) {
-          if (sendMessage) await sendMessage(trimmed, 'text', undefined, replyingTo?.id, tagsToSend);
-          else await chatService.sendMessage(conversationId, trimmed, undefined, replyingTo?.id, tagsToSend);
+      if (filesToSend.length > 0) {
+        // Backend messages carry at most one file each, so the typed text rides
+        // as the caption on the first file instead of becoming its own message —
+        // that's what keeps text + image together as a single combined message.
+        const [firstFile, ...restFiles] = filesToSend;
+        if (createPlaceholderProp && uploadPlaceholderProp) {
+          // Insert every tile's placeholder synchronously, back to back, so the
+          // whole grid — and the auto-scroll it triggers — appears instantly,
+          // regardless of how long any individual upload takes.
+          const firstPlaceholder = createPlaceholderProp(firstFile, trimmed || undefined, replyingTo?.id);
+          const restPlaceholders = restFiles.map((file) => createPlaceholderProp(file, undefined, replyingTo?.id));
+
+          // The grouping logic in MessageArea identifies a run's caption by
+          // assuming the captioned (first) file's message always lands with the
+          // earliest createdAt in its batch. Dispatching every upload at once
+          // broke that: a later file could finish first and get an earlier
+          // timestamp, making the run's "anchor" look uncaptioned and falling
+          // back to the loose cross-batch grouping window — merging in a
+          // separate, later send. So the lead file's upload must resolve
+          // before the rest start (its placeholder is still shown instantly).
+          if (firstPlaceholder) {
+            try {
+              await uploadPlaceholderProp(firstPlaceholder, firstFile, trimmed || undefined, replyingTo?.id);
+            } catch { /* already surfaced as a failed tile + toast */ }
+          }
+          await Promise.allSettled(
+            restFiles.map((file, idx) => {
+              const placeholder = restPlaceholders[idx];
+              return placeholder ? uploadPlaceholderProp(placeholder, file, undefined, replyingTo?.id) : Promise.resolve();
+            })
+          );
+        } else if (sendFileMessageProp) {
+          try {
+            await sendFileMessageProp(firstFile, trimmed || undefined, replyingTo?.id);
+          } catch { /* already surfaced as a failed tile + toast */ }
+          await Promise.allSettled(restFiles.map((file) => sendFileMessageProp(file, undefined, replyingTo?.id)));
+        } else {
+          await sendFileMessageFallback(firstFile, trimmed || undefined);
+          for (const file of restFiles) {
+            await sendFileMessageFallback(file);
+          }
         }
-        for (const file of pendingFiles) {
-          await sendFileMessage(file);
+        if (tagsToSend.length > 0) {
+          if (sendMessage) await sendMessage('', 'text', undefined, undefined, tagsToSend);
+          else await chatService.sendMessage(conversationId, '', undefined, undefined, tagsToSend);
         }
-        setPendingFiles([]);
       } else {
         if (sendMessage) await sendMessage(trimmed, 'text', undefined, replyingTo?.id, tagsToSend);
         else await chatService.sendMessage(conversationId, trimmed, undefined, replyingTo?.id, tagsToSend);
@@ -717,6 +820,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
       logger.error('Failed to send message:', err);
       toast.error('Failed to send message');
       setDraft(conversationId, trimmed);
+      setPendingFiles(filesToSend);
     } finally {
       setIsSending(false);
     }
@@ -1114,42 +1218,54 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
 
         {/* Input bar */}
         {isMobile ? (
-          <div className="mx-auto w-full flex items-center gap-1.5">
-            {/* 😊 Emoji */}
-            <Button
-              ref={emojiButtonRef}
-              variant="ghost" size="icon" type="button"
-              className={cn(
-                'h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-yellow-500 hover:bg-accent/70 transition-colors',
-                showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
-              )}
-              title="Emoji"
-              onClick={() => setShowEmojiPicker(v => !v)}
-            >
-              <Smile className="h-5 w-5" />
-            </Button>
+          <div className={cn(
+            'mx-auto w-full flex gap-1.5',
+            // Same behaviour as desktop: one row while the text fits on a single
+            // line, and once it wraps the input takes the full width on its own
+            // row with the controls dropping in underneath it.
+            isStacked ? 'flex-wrap items-center' : 'items-end'
+          )}>
 
-            {/* + Attach */}
-            <Button
-              variant="ghost" size="icon" type="button"
-              className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
-              title="Attach files"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={readOnly}
-            >
-              <Plus className="h-5 w-5" />
-            </Button>
+            <div ref={leftControlsRef} className={cn('flex items-center gap-1.5 shrink-0', isStacked && 'order-2')}>
+              {/* 😊 Emoji */}
+              <Button
+                ref={emojiButtonRef}
+                variant="ghost" size="icon" type="button"
+                className={cn(
+                  'h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-yellow-500 hover:bg-accent/70 transition-colors',
+                  showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
+                )}
+                title="Emoji"
+                onClick={() => setShowEmojiPicker(v => !v)}
+              >
+                <Smile className="h-5 w-5" />
+              </Button>
+
+              {/* + Attach */}
+              <Button
+                variant="ghost" size="icon" type="button"
+                className="h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
+                title="Attach files"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={readOnly}
+              >
+                <Plus className="h-5 w-5" />
+              </Button>
+            </div>
 
             {/* Bordered message pill */}
-            <div className="flex-1 min-w-0 flex items-center gap-1 rounded-full border border-input bg-background px-4 min-h-[42px] focus-within:ring-2 focus-within:ring-ring/70 transition-all">
+            <div className={cn(
+              'min-w-0 flex items-end gap-1 rounded-3xl border border-input bg-background px-4 py-[11px] min-h-[42px] focus-within:ring-2 focus-within:ring-ring/70 transition-all',
+              isStacked ? 'order-1 w-full' : 'flex-1'
+            )}>
               <div className="relative flex-1 min-w-0 flex items-center">
                 <div
                   ref={mentionOverlayRef}
                   aria-hidden="true"
-                  className="absolute inset-x-0 top-1/2 -translate-y-1/2 overflow-hidden whitespace-pre-wrap break-words text-sm leading-5 max-h-[140px] pointer-events-none"
+                  className="custom-scrollbar absolute inset-x-0 flex items-start overflow-hidden whitespace-pre-wrap break-words text-sm leading-5 max-h-[140px] pointer-events-none"
                   style={TEXT_SIZE_ADJUST_STYLE}
                 >
-                  {mentionHighlightNodes}
+                  <span className="w-full">{mentionHighlightNodes}</span>
                 </div>
                 <textarea
                   ref={textareaRef}
@@ -1160,7 +1276,7 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
                   onScroll={syncOverlayScroll}
                   placeholder="Type a message..."
                   rows={1}
-                  className="relative w-full resize-none overflow-hidden bg-transparent text-sm leading-5 max-h-[140px] text-transparent caret-foreground placeholder:text-muted-foreground/90 focus-visible:outline-none"
+                  className="custom-scrollbar relative w-full resize-none overflow-x-hidden bg-transparent text-sm leading-5 max-h-[140px] text-transparent caret-foreground placeholder:text-muted-foreground/90 focus-visible:outline-none"
                   style={TEXT_SIZE_ADJUST_STYLE}
                   disabled={readOnly}
                 />
@@ -1172,54 +1288,67 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
               )}
             </div>
 
-            {/* Send */}
-            <Button
-              size="icon" type="button"
-              className="h-11 w-11 shrink-0 rounded-full bg-foreground text-background hover:bg-foreground/90"
-              disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
-              onClick={handleSend}
-            >
-              {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
-            </Button>
+            <div ref={rightControlsRef} className={cn('flex items-center shrink-0', isStacked && 'order-3 ml-auto')}>
+              {/* Send */}
+              <Button
+                size="icon" type="button"
+                className="h-11 w-11 shrink-0 rounded-full bg-foreground text-background hover:bg-foreground/90"
+                disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
+                onClick={handleSend}
+              >
+                {isSending ? <Loader2 className="h-5 w-5 animate-spin" /> : <ArrowUp className="h-5 w-5" />}
+              </Button>
+            </div>
           </div>
         ) : (
-          <div className="mx-auto w-full flex items-center gap-1 rounded-2xl border border-input/80 bg-background/85 backdrop-blur-md px-2 py-1.5 shadow-[0_8px_24px_rgba(0,0,0,0.18)] focus-within:ring-2 focus-within:ring-ring/70 focus-within:ring-offset-2 ring-offset-background transition-all">
+          <div className={cn(
+            'mx-auto w-full flex gap-1 rounded-2xl border border-input/80 bg-background/85 backdrop-blur-md px-3 py-2 shadow-[0_8px_24px_rgba(0,0,0,0.18)] focus-within:ring-2 focus-within:ring-ring/70 focus-within:ring-offset-2 ring-offset-background transition-all',
+            // One line: everything shares a row. Wrapped: the textarea takes the
+            // full width on its own row (`w-full` forces the wrap) and both
+            // control groups fall in underneath it.
+            isStacked ? 'flex-wrap items-center' : 'items-end'
+          )}>
 
-            {/* 😊 Emoji */}
-            <Button
-              ref={emojiButtonRef}
-              variant="ghost" size="icon" type="button"
-              className={cn(
-                'h-7 w-7 md:h-8 md:w-8 shrink-0 text-muted-foreground hover:text-yellow-500 transition-colors',
-                'rounded-full hover:bg-accent/70',
-                showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
-              )}
-              title="Emoji"
-              onClick={() => setShowEmojiPicker(v => !v)}
-            >
-              <Smile className="h-4 w-4" />
-            </Button>
+            <div ref={leftControlsRef} className={cn('flex items-center gap-1 shrink-0', isStacked && 'order-2')}>
+              {/* 😊 Emoji */}
+              <Button
+                ref={emojiButtonRef}
+                variant="ghost" size="icon" type="button"
+                className={cn(
+                  'h-7 w-7 md:h-8 md:w-8 shrink-0 text-muted-foreground hover:text-yellow-500 transition-colors',
+                  'rounded-full hover:bg-accent/70',
+                  showEmojiPicker && 'text-yellow-500 bg-yellow-500/10'
+                )}
+                title="Emoji"
+                onClick={() => setShowEmojiPicker(v => !v)}
+              >
+                <Smile className="h-4 w-4" />
+              </Button>
 
-            {/* 📎 File */}
-            <Button
-              variant="ghost" size="icon" type="button"
-              className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
-              title="Attach files"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={readOnly}
-            >
-              <Paperclip className="h-4 w-4" />
-            </Button>
+              {/* 📎 File */}
+              <Button
+                variant="ghost" size="icon" type="button"
+                className="h-7 w-7 md:h-8 md:w-8 shrink-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-accent/70 transition-colors"
+                title="Attach files"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={readOnly}
+              >
+                <Paperclip className="h-4 w-4" />
+              </Button>
+            </div>
 
             {/* Textarea */}
-            <div className="flex-1 min-w-0 relative px-0.5 flex items-center min-h-[28px] md:min-h-[32px]">
+            <div className={cn(
+              'relative min-w-0 flex items-center min-h-[28px] md:min-h-[32px]',
+              isStacked ? 'order-1 w-full' : 'flex-1'
+            )}>
               <div
                 ref={mentionOverlayRef}
                 aria-hidden="true"
-                className="absolute inset-x-0 top-1/2 -translate-y-1/2 px-0.5 overflow-hidden whitespace-pre-wrap break-words text-sm leading-5 max-h-[140px] pointer-events-none"
+                className="custom-scrollbar absolute inset-x-0 flex items-start px-0.5 overflow-hidden whitespace-pre-wrap break-words text-sm leading-5 max-h-[140px] pointer-events-none"
                 style={TEXT_SIZE_ADJUST_STYLE}
               >
-                {mentionHighlightNodes}
+                <span className="w-full">{mentionHighlightNodes}</span>
               </div>
               <textarea
                 ref={textareaRef}
@@ -1230,26 +1359,29 @@ export function MessageInput({ conversationId, onMessageSent, onTyping, members,
                 onScroll={syncOverlayScroll}
                 placeholder={otherMembers.length <= 1 ? 'Type a message...' : 'Type a message... Use @ to mention'}
                 rows={1}
-                className="relative w-full resize-none bg-transparent text-sm leading-5 max-h-[140px] text-transparent caret-foreground placeholder:text-muted-foreground/90 focus-visible:outline-none"
+                className="custom-scrollbar relative w-full resize-none overflow-x-hidden bg-transparent px-0.5 text-sm leading-5 max-h-[140px] text-transparent caret-foreground placeholder:text-muted-foreground/90 focus-visible:outline-none"
                 style={TEXT_SIZE_ADJUST_STYLE}
                 disabled={readOnly}
               />
+            </div>
+
+            <div ref={rightControlsRef} className={cn('flex items-center gap-1 shrink-0', isStacked && 'order-3 ml-auto')}>
               {showCharCount && (
-                <span className="absolute bottom-0.5 right-1 text-[10px] text-muted-foreground">
+                <span className="shrink-0 text-[10px] text-muted-foreground">
                   {value.length}/{MAX_CHARS}
                 </span>
               )}
-            </div>
 
-            {/* Send */}
-            <Button
-              size="icon" type="button"
-              className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground shadow-[0_3px_10px_rgba(0,0,0,0.22)] hover:bg-primary/90"
-              disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
-              onClick={handleSend}
-            >
-              {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-            </Button>
+              {/* Send */}
+              <Button
+                size="icon" type="button"
+                className="h-8 w-8 shrink-0 rounded-full bg-primary text-primary-foreground shadow-[0_3px_10px_rgba(0,0,0,0.22)] hover:bg-primary/90"
+                disabled={readOnly || ((!value.trim() && pendingFiles.length === 0 && pendingEntityTags.length === 0) || isSending)}
+                onClick={handleSend}
+              >
+                {isSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
         )}
       </div>

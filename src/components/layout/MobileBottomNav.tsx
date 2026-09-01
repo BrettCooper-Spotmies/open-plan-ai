@@ -12,20 +12,30 @@ import {
   Calendar,
   Sparkles,
   Plug,
+  Warehouse,
   X,
+  Check,
+  ChevronDown,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Logo } from '@/components/Logo';
+import { useOrganization } from '@/contexts/OrganizationContext';
+import { OrganizationSettings } from '@/services/organizations.service';
+import { resolveFileUrl } from '@/utils/fileUrl';
 import { useAssistantDraftStore } from '@/features/assistant/stores/useAssistantDraftStore';
+import { useFeatureTogglesStore, type ToggleableFeature } from '@/stores/useFeatureTogglesStore';
 
 interface NavItem {
   title: string;
   url: string;
   icon: React.ElementType;
+  feature?: ToggleableFeature;
 }
 
 // Primary tabs shown in the footer
 const primaryNavItems: NavItem[] = [
-  { title: 'My Tasks',   url: '/my-day',   icon: ListTodo       },
+  { title: 'My Tasks',   url: '/my-day',   icon: ListTodo,        feature: 'my-tasks' },
   { title: 'Projects',   url: '/projects', icon: FolderKanban   },
   { title: 'Dashboard',  url: '/',         icon: LayoutDashboard},
   { title: 'Chat',       url: '/chat',     icon: MessageSquare  },
@@ -35,8 +45,9 @@ const primaryNavItems: NavItem[] = [
 const moreNavItems: NavItem[] = [
   { title: 'Assistant', url: '/assistant', icon: Sparkles      },
   { title: 'Team',      url: '/team',     icon: Users         },
-  { title: 'Calendar',  url: '/calendar', icon: Calendar      },
-  { title: 'Reports',   url: '/reports',  icon: BarChart3     },
+  { title: 'Calendar',  url: '/calendar', icon: Calendar,      feature: 'calendar' },
+  { title: 'Reports',   url: '/reports',  icon: BarChart3,     feature: 'reports' },
+  { title: 'Inventory', url: '/inventory', icon: Warehouse,    feature: 'inventory' },
   { title: 'Integrations', url: '/integrations', icon: Plug   },
   { title: 'Settings',  url: '/settings', icon: Settings      },
 ];
@@ -46,8 +57,20 @@ export function MobileBottomNav() {
   const navigate = useNavigate();
   const [moreOpen, setMoreOpen] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
-  const visibleMoreNavItems = moreNavItems;
+  const enabledFeatures = useFeatureTogglesStore((s) => s.enabled);
+  const visiblePrimaryNavItems = primaryNavItems.filter((item) => !item.feature || enabledFeatures[item.feature]);
+  const visibleMoreNavItems = moreNavItems.filter((item) => !item.feature || enabledFeatures[item.feature]);
   const lastAssistantConversationId = useAssistantDraftStore((s) => s.lastActiveConversationId);
+
+  // Org switching lives in the sidebar on desktop, which mobile never renders —
+  // without this a multi-org member is stuck on whichever org this device
+  // happened to restore, with every org-scoped view silently empty.
+  const { organizations, currentOrganization, setCurrentOrganization, isLoading: orgLoading } = useOrganization();
+  const [orgListOpen, setOrgListOpen] = useState(false);
+  const canSwitchOrg = organizations.length > 1;
+
+  const currentOrgSettings = (currentOrganization?.settings || {}) as OrganizationSettings;
+  const currentOrgLogo = resolveFileUrl(currentOrgSettings.logoUrl) ?? currentOrgSettings.logoUrl ?? null;
 
   // Tapping "Assistant" always used to reset to a blank composer, even if a
   // thread was already open before navigating elsewhere — send it back to
@@ -87,8 +110,24 @@ export function MobileBottomNav() {
     setMoreOpen(false);
   }, [location.pathname]);
 
+  // Collapse the org list whenever the sheet closes, so reopening "More"
+  // always starts on the nav grid rather than mid-switch.
+  useEffect(() => {
+    if (!moreOpen) setOrgListOpen(false);
+  }, [moreOpen]);
+
   const handleNavClick = (url: string) => {
     navigate(url);
+  };
+
+  // Land on the dashboard after switching, same as the desktop sidebar: the
+  // current route may point at a project/task belonging to the old org.
+  const handleSelectOrg = (org: typeof currentOrganization) => {
+    if (!org) return;
+    setCurrentOrganization(org);
+    setOrgListOpen(false);
+    setMoreOpen(false);
+    navigate('/');
   };
 
   return (
@@ -128,6 +167,86 @@ export function MobileBottomNav() {
           </button>
         </div>
 
+        {/* Current organization + switcher */}
+        {(orgLoading || currentOrganization) && (
+          <div className="border-b border-border">
+            <button
+              onClick={() => canSwitchOrg && setOrgListOpen((o) => !o)}
+              disabled={!canSwitchOrg}
+              className={cn(
+                'w-full flex items-center gap-3 px-5 py-3 text-left transition-colors',
+                canSwitchOrg ? 'hover:bg-accent/50' : 'cursor-default',
+              )}
+              aria-expanded={canSwitchOrg ? orgListOpen : undefined}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 border border-primary/20 overflow-hidden">
+                {currentOrgLogo ? (
+                  <img src={currentOrgLogo} alt="" className="h-full w-full object-contain" />
+                ) : (
+                  <Logo className="h-4 w-4 text-primary" />
+                )}
+              </div>
+              <div className="flex flex-col min-w-0 flex-1">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Organization
+                </span>
+                <span className="text-sm font-medium text-foreground truncate">
+                  {orgLoading && !currentOrganization ? 'Loading…' : currentOrganization?.name}
+                </span>
+              </div>
+              {canSwitchOrg && (
+                <ChevronDown
+                  className={cn(
+                    'h-4 w-4 text-muted-foreground shrink-0 transition-transform duration-200',
+                    orgListOpen && 'rotate-180',
+                  )}
+                />
+              )}
+            </button>
+
+            {canSwitchOrg && orgListOpen && (
+              <div className="max-h-[220px] overflow-y-auto border-t border-border/60 bg-muted/20 py-1">
+                {orgLoading ? (
+                  <div className="flex items-center justify-center py-6">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : (
+                  organizations.map((org) => {
+                    const settings = (org.settings || {}) as OrganizationSettings;
+                    const logoUrl = resolveFileUrl(settings.logoUrl) ?? settings.logoUrl ?? null;
+                    const isSelected = currentOrganization?.id === org.id;
+                    return (
+                      <button
+                        key={org.id}
+                        onClick={() => handleSelectOrg(org)}
+                        className={cn(
+                          'w-full flex items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-accent/50',
+                          isSelected && 'bg-accent/60',
+                        )}
+                      >
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary/10 border border-primary/20 overflow-hidden">
+                          {logoUrl ? (
+                            <img src={logoUrl} alt="" className="h-full w-full object-contain" />
+                          ) : (
+                            <Logo className="h-3.5 w-3.5 text-primary" />
+                          )}
+                        </div>
+                        <div className="flex flex-col min-w-0 flex-1">
+                          <span className="text-sm font-medium text-foreground truncate">{org.name}</span>
+                          {settings.companyName && (
+                            <span className="text-[11px] text-muted-foreground truncate">{settings.companyName}</span>
+                          )}
+                        </div>
+                        {isSelected && <Check className="h-4 w-4 text-primary shrink-0" />}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Sheet items */}
         <div className="grid grid-cols-3 gap-1 px-3 py-4">
           {visibleMoreNavItems.map((item) => {
@@ -160,8 +279,11 @@ export function MobileBottomNav() {
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-label="Mobile bottom navigation"
       >
-        <div className="h-16 px-2 grid grid-cols-5 items-center">
-          {primaryNavItems.map((item) => {
+        <div
+          className="h-16 px-2 grid items-center"
+          style={{ gridTemplateColumns: `repeat(${visiblePrimaryNavItems.length + 1}, minmax(0, 1fr))` }}
+        >
+          {visiblePrimaryNavItems.map((item) => {
             const active = isActive(item.url);
             return (
               <button

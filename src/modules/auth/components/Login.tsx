@@ -123,12 +123,13 @@ const Login = () => {
 
         if (inviteIdentifier) {
           await teamService.acceptInvitation(inviteIdentifier);
-          localStorage.removeItem('pending_invite_id');
-          localStorage.removeItem('pending_invite_token');
         }
       } catch (inviteAcceptError) {
         // Non-fatal: user still logs in and can accept manually from Dashboard banner.
         console.warn('Auto-accept invitation after login failed:', inviteAcceptError);
+      } finally {
+        localStorage.removeItem('pending_invite_id');
+        localStorage.removeItem('pending_invite_token');
       }
 
       navigate(from, { replace: true });
@@ -256,6 +257,7 @@ const Login = () => {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
+                    name="email"
                     type="email"
                     placeholder="you@company.com"
                     value={email}
@@ -263,6 +265,7 @@ const Login = () => {
                     className="pl-10"
                     required
                     disabled={isLoading}
+                    autoComplete="email"
                   />
                 </div>
               </div>
@@ -280,6 +283,7 @@ const Login = () => {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="password"
+                    name="current-password"
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter your password"
                     value={password}
@@ -287,6 +291,7 @@ const Login = () => {
                     className="pl-10 pr-10"
                     required
                     disabled={isLoading}
+                    autoComplete="current-password"
                   />
                   <button
                     type="button"

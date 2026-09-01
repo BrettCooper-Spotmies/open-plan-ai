@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import {
-  CheckCircle, Truck, Flag, ArrowRight, ClipboardCheck, Plus, Search,
-  Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag, ChevronLeft,
+  CheckCircle, Truck, Flag, ArrowRight, ClipboardCheck, Plus, Search, ChevronLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,28 +11,66 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getCategoryMeta } from './bomData';
+import { useAllocateBuild, useKitBuild, useGenerateShortageOrders } from '@/hooks/useInventory';
+import { HoverZoomImage, PartThumb } from './BOMShared';
 import { CoveragePill, formatShortDate, type Build } from './inventoryData';
-
-// Maps bomData's BOM_CAT_META.iconName strings to the actual icon component.
-const CATEGORY_ICON_MAP: Record<string, React.ElementType> = { Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag };
+import { NewBuildDialog, type NewBuildInput } from './NewBuildDialog';
+import { GenerateShortageOrdersDialog } from './GenerateShortageOrdersDialog';
 
 // Fixed accent per build phase — purely visual grouping, matches the design system's build type chips.
 const BUILD_TYPE_TINT: Record<string, string> = { EVT: '#7C3AED', DVT: '#2563EB', PVT: '#16A34A' };
 
 interface BuildsPanelProps {
+  orgId: string;
   builds: Build[];
   onSelectPart: (partId: string) => void;
   openBuildId?: string | null;
   onOpenBuildHandled?: () => void;
+  onAddBuild: (input: NewBuildInput) => void;
+  projects: { id: string; name: string }[];
 }
 
-export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHandled }: BuildsPanelProps) {
+export function BuildsPanel({ orgId, builds, onSelectPart, openBuildId, onOpenBuildHandled, onAddBuild, projects }: BuildsPanelProps) {
   const isMobile = useIsMobile();
   const [selectedBuildId, setSelectedBuildId] = useState(builds[0]?.id);
   const [mobileSearch, setMobileSearch] = useState('');
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [newBuildOpen, setNewBuildOpen] = useState(false);
+  const [shortageDialogOpen, setShortageDialogOpen] = useState(false);
   const selectedBuild = builds.find(b => b.id === selectedBuildId) ?? builds[0];
+
+  const allocateMutation = useAllocateBuild(orgId);
+  const kitMutation = useKitBuild(orgId);
+  const shortageOrderMutation = useGenerateShortageOrders(orgId);
+
+  const canKit = !!selectedBuild && selectedBuild.status === 'allocated';
+  const isKitted = selectedBuild?.status === 'kitted';
+  // Nothing left to reserve once every line's allocated qty already meets its required qty —
+  // disable the button instead of letting it be clicked as a no-op.
+  const hasOutstandingDemand = !!selectedBuild?.lines.some((l) => l.required - l.allocated > 0);
+  const handleAutoAllocate = () => { if (selectedBuild) allocateMutation.mutate(selectedBuild.id); };
+  const handleMarkKitted = () => { if (selectedBuild) kitMutation.mutate(selectedBuild.id); };
+  // Opens the checklist dialog instead of ordering everything blind — the user picks which
+  // shorted part(s) to actually send to procurement right now.
+  const handleGenerateShortage = () => setShortageDialogOpen(true);
+  // A part that already has a pending order gets its quantity topped up instead of a
+  // duplicate order; a part with no pending order gets a new one.
+  const handleConfirmShortageOrders = (partIds: string[]) => {
+    if (!selectedBuild) return;
+    shortageOrderMutation.mutate({ buildId: selectedBuild.id, partIds }, {
+      onSuccess: (result) => {
+        setShortageDialogOpen(false);
+        const created = result.lines.filter((l) => l.action === 'created').length;
+        const updated = result.lines.filter((l) => l.action === 'updated').length;
+        const parts = [
+          created > 0 && `${created} new order${created === 1 ? '' : 's'}`,
+          updated > 0 && `${updated} existing order${updated === 1 ? '' : 's'} topped up`,
+        ].filter(Boolean).join(', ');
+        toast.success(`Ordered ${result.lines.length} shorted part(s) — ${parts}`);
+      },
+      onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to generate shortage orders'),
+    });
+  };
 
   // Alerts tab hands off a build to open here — jump to it and, on mobile, pop the detail dialog.
   useEffect(() => {
@@ -44,11 +82,17 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
 
   if (!selectedBuild) {
     return (
-      <Card>
-        <CardContent className="py-12 text-center text-sm text-muted-foreground">
-          No builds yet.
-        </CardContent>
-      </Card>
+      <>
+        <Card>
+          <CardContent className="py-12 text-center space-y-3">
+            <p className="text-sm text-muted-foreground">No builds yet.</p>
+            <Button size="sm" onClick={() => setNewBuildOpen(true)}>
+              <Plus className="h-4 w-4 mr-1.5" /> New build
+            </Button>
+          </CardContent>
+        </Card>
+        <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} projects={projects} />
+      </>
     );
   }
 
@@ -60,14 +104,19 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
 
     return (
       <div className="space-y-3">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search builds..."
-            value={mobileSearch}
-            onChange={(e) => setMobileSearch(e.target.value)}
-            className="pl-9"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search builds..."
+              value={mobileSearch}
+              onChange={(e) => setMobileSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <Button size="icon" variant="outline" className="h-10 w-10 shrink-0" onClick={() => setNewBuildOpen(true)} title="New build">
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
 
         {filteredBuilds.length === 0 ? (
@@ -139,6 +188,11 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
               <p className="text-sm text-muted-foreground">
                 BOM {selectedBuild.bomRev} · {selectedBuild.units} units · scrap {selectedBuild.scrapPct}% · linked to{' '}
                 <span className="font-medium text-foreground">{selectedBuild.linkedMilestone}</span>
+                {selectedBuild.assignee && (
+                  <>
+                    {' '}· Assigned to <span className="font-medium text-foreground">{selectedBuild.assignee.name}</span>
+                  </>
+                )}
               </p>
 
               <div className="flex items-center justify-between gap-4 rounded-lg border p-3">
@@ -167,22 +221,39 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
               )}
 
               <div className="flex flex-col gap-2">
-                <Button className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left" disabled title="Coming soon">
-                  <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" /> Auto-allocate available
+                <Button
+                  className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left"
+                  disabled={isKitted || !hasOutstandingDemand || allocateMutation.isPending}
+                  onClick={handleAutoAllocate}
+                >
+                  <ClipboardCheck className="h-4 w-4 mr-2 shrink-0" />
+                  {allocateMutation.isPending ? 'Allocating…' : 'Auto-allocate available'}
                 </Button>
-                <Button className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left" variant="outline" disabled title="Coming soon">
+                <Button
+                  className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left"
+                  variant="outline"
+                  disabled={selectedBuild.shortLines.length === 0}
+                  onClick={handleGenerateShortage}
+                >
                   <Truck className="h-4 w-4 mr-2 shrink-0" /> Generate shortage → Procurement
                 </Button>
-                <Button className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left" variant="outline" disabled title="Coming soon">
-                  <CheckCircle className="h-4 w-4 mr-2 shrink-0" /> Mark kitted
+                <Button
+                  className="h-auto min-w-0 justify-start whitespace-normal py-2.5 text-left"
+                  variant="outline"
+                  disabled={!canKit || kitMutation.isPending}
+                  onClick={handleMarkKitted}
+                >
+                  <CheckCircle className="h-4 w-4 mr-2 shrink-0" />
+                  {isKitted ? 'Kitted' : kitMutation.isPending ? 'Marking…' : 'Mark kitted'}
                 </Button>
               </div>
 
               <div className="space-y-2">
                 {selectedBuild.lines.map((l) => {
-                  const shortfall = l.required > l.available ? l.available - l.required : 0;
-                  const meta = getCategoryMeta(l.cat);
-                  const CategoryIcon = CATEGORY_ICON_MAP[meta.iconName] ?? Tag;
+                  // Same outstanding-vs-total logic as the desktop table — see comment there.
+                  const outstanding = Math.max(0, l.required - l.allocated);
+                  const shortfall =
+                    outstanding > l.available + l.onOrder ? l.available + l.onOrder - outstanding : 0;
                   return (
                     <button
                       key={l.partId}
@@ -190,12 +261,9 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
                       className="w-full text-left rounded-lg border p-3 active:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center gap-2 min-w-0 mb-2">
-                        <div
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-                          style={{ background: `${meta.tint}1a`, color: meta.tint }}
-                        >
-                          <CategoryIcon className="h-3.5 w-3.5" />
-                        </div>
+                        <HoverZoomImage imageUrl={l.imageUrl} enabled={!!l.imageUrl}>
+                          <PartThumb cat={l.cat} size={28} radius={7} imageUrl={l.imageUrl} />
+                        </HoverZoomImage>
                         <div className="min-w-0 flex-1">
                           <div className="text-sm font-medium text-primary truncate">{l.pn}</div>
                           <div className="text-xs text-muted-foreground truncate">{l.name}</div>
@@ -204,7 +272,7 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
                       </div>
                       <div className="grid grid-cols-4 gap-2 pt-2 border-t border-border text-center">
                         <div>
-                          <div className="text-sm font-semibold">{l.required}</div>
+                          <div className="text-sm font-semibold">{outstanding}</div>
                           <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Req</div>
                         </div>
                         <div>
@@ -229,6 +297,15 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
             </div>
           </DialogContent>
         </Dialog>
+        <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} projects={projects} />
+        <GenerateShortageOrdersDialog
+          isOpen={shortageDialogOpen}
+          onClose={() => setShortageDialogOpen(false)}
+          buildName={selectedBuild.name}
+          lines={selectedBuild.shortLines}
+          onConfirm={handleConfirmShortageOrders}
+          isSubmitting={shortageOrderMutation.isPending}
+        />
       </div>
     );
   }
@@ -239,7 +316,7 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
       <div className="w-full lg:w-72 shrink-0 rounded-xl border border-border bg-card p-3 lg:sticky lg:top-6">
         <div className="flex items-center justify-between mb-3 px-1">
           <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">Builds</h3>
-          <Button size="icon" variant="outline" className="h-7 w-7" disabled title="Coming soon">
+          <Button size="icon" variant="outline" className="h-7 w-7" onClick={() => setNewBuildOpen(true)} title="New build">
             <Plus className="h-4 w-4" />
           </Button>
         </div>
@@ -300,6 +377,11 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
         <p className="text-sm text-muted-foreground">
           BOM {selectedBuild.bomRev} · {selectedBuild.units} units · scrap {selectedBuild.scrapPct}% · linked to{' '}
           <span className="font-medium text-foreground">{selectedBuild.linkedMilestone}</span>
+          {selectedBuild.assignee && (
+            <>
+              {' '}· Assigned to <span className="font-medium text-foreground">{selectedBuild.assignee.name}</span>
+            </>
+          )}
         </p>
 
         <div className="flex items-center justify-between gap-4 flex-wrap rounded-lg border p-3">
@@ -331,14 +413,16 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
         )}
 
         <div className="flex flex-wrap gap-2">
-          <Button disabled title="Coming soon">
-            <ClipboardCheck className="h-4 w-4 mr-2" /> Auto-allocate available
+          <Button disabled={isKitted || !hasOutstandingDemand || allocateMutation.isPending} onClick={handleAutoAllocate}>
+            <ClipboardCheck className="h-4 w-4 mr-2" />
+            {allocateMutation.isPending ? 'Allocating…' : 'Auto-allocate available'}
           </Button>
-          <Button variant="outline" disabled title="Coming soon">
+          <Button variant="outline" disabled={selectedBuild.shortLines.length === 0} onClick={handleGenerateShortage}>
             <Truck className="h-4 w-4 mr-2" /> Generate shortage → Procurement
           </Button>
-          <Button variant="outline" disabled title="Coming soon">
-            <CheckCircle className="h-4 w-4 mr-2" /> Mark kitted
+          <Button variant="outline" disabled={!canKit || kitMutation.isPending} onClick={handleMarkKitted}>
+            <CheckCircle className="h-4 w-4 mr-2" />
+            {isKitted ? 'Kitted' : kitMutation.isPending ? 'Marking…' : 'Mark kitted'}
           </Button>
         </div>
 
@@ -358,19 +442,19 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
             </TableHeader>
             <TableBody>
               {selectedBuild.lines.map((l) => {
-                const shortfall = l.required > l.available ? l.available - l.required : 0;
-                const meta = getCategoryMeta(l.cat);
-                const CategoryIcon = CATEGORY_ICON_MAP[meta.iconName] ?? Tag;
+                // "Required" shown here is the outstanding amount still to allocate — total
+                // BOM demand minus what's already been reserved for this build — so it counts
+                // down as Auto-allocate reserves stock, instead of staying pinned at the total.
+                const outstanding = Math.max(0, l.required - l.allocated);
+                const shortfall =
+                  outstanding > l.available + l.onOrder ? l.available + l.onOrder - outstanding : 0;
                 return (
                   <TableRow key={l.partId} className="cursor-pointer" onClick={() => onSelectPart(l.partId)}>
                     <TableCell className="px-3 py-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <div
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-                          style={{ background: `${meta.tint}1a`, color: meta.tint }}
-                        >
-                          <CategoryIcon className="h-3.5 w-3.5" />
-                        </div>
+                        <HoverZoomImage imageUrl={l.imageUrl} enabled={!!l.imageUrl}>
+                          <PartThumb cat={l.cat} size={28} radius={7} imageUrl={l.imageUrl} />
+                        </HoverZoomImage>
                         <div className="min-w-0">
                           <div className="text-sm font-medium text-primary truncate">{l.pn}</div>
                           <div className="text-xs text-muted-foreground truncate">{l.name}</div>
@@ -378,7 +462,7 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
                       </div>
                     </TableCell>
                     <TableCell className="px-3 py-2 text-right">{l.qtyPerUnit} {l.uom}</TableCell>
-                    <TableCell className="px-3 py-2 text-right font-semibold">{l.required}</TableCell>
+                    <TableCell className="px-3 py-2 text-right font-semibold">{outstanding}</TableCell>
                     <TableCell className="px-3 py-2 text-right">{l.available}</TableCell>
                     <TableCell className="px-3 py-2 text-right">{l.allocated}</TableCell>
                     <TableCell className="px-3 py-2 text-right">{l.onOrder || '—'}</TableCell>
@@ -393,6 +477,15 @@ export function BuildsPanel({ builds, onSelectPart, openBuildId, onOpenBuildHand
           </Table>
         </div>
       </div>
+      <NewBuildDialog isOpen={newBuildOpen} onClose={() => setNewBuildOpen(false)} onAddBuild={onAddBuild} projects={projects} />
+      <GenerateShortageOrdersDialog
+        isOpen={shortageDialogOpen}
+        onClose={() => setShortageDialogOpen(false)}
+        buildName={selectedBuild.name}
+        lines={selectedBuild.shortLines}
+        onConfirm={handleConfirmShortageOrders}
+        isSubmitting={shortageOrderMutation.isPending}
+      />
     </div>
   );
 }

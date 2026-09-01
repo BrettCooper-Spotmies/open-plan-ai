@@ -173,6 +173,8 @@ export function useMessages(conversationId: string | null) {
   const [joinedAt, setJoinedAt] = useState<string | null>(null);
   const channelRef = useRef<Unsubscribe | null>(null);
   const updateChannelRef = useRef<Unsubscribe | null>(null);
+  const activeConversationIdRef = useRef(conversationId);
+  activeConversationIdRef.current = conversationId;
   const PAGE_SIZE = 50;
 
   const accessStateCacheRef = useRef(new Map<string, { expiresAt: number; state: ConversationAccessState }>());
@@ -280,9 +282,26 @@ export function useMessages(conversationId: string | null) {
           .getMessages(conversationId, { limit: PAGE_SIZE })
           .then((data) => {
             if (cancelled) return;
-            setMessages(data);
-            setHasMore(data.length === PAGE_SIZE);
-            setCachedMessages(conversationId, data, data.length === PAGE_SIZE);
+            // Merge the freshened recent window into whatever's currently
+            // loaded instead of replacing it outright — the user may have
+            // paged further back via "Load older messages" while this was
+            // in flight, and a hard replace would silently discard that
+            // history and snap the view back to just the latest page.
+            // `hasMore` describes whether older history exists beyond what's
+            // loaded, so it's intentionally left untouched here.
+            setMessages((prev) => {
+              const byId = new Map(prev.map((m) => [m.id, m]));
+              for (const m of data) byId.set(m.id, m);
+              return Array.from(byId.values()).sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+              );
+            });
+            const cachedById = new Map(cachedEntry.messages.map((m) => [m.id, m]));
+            for (const m of data) cachedById.set(m.id, m);
+            const mergedForCache = Array.from(cachedById.values()).sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+            setCachedMessages(conversationId, mergedForCache, cachedEntry.hasMore);
           })
           .catch((err) => {
             if (!cancelled) logger.error('Background message revalidation failed:', err);
@@ -460,6 +479,83 @@ export function useMessages(conversationId: string | null) {
     }
   }, [conversationId, user, profile, storeAddMessage, storeResolveOptimistic, storeUpdateMessage, addPendingMessage, removePendingMessage, updatePreview]);
 
+  // Split into two phases so a multi-file send can show every tile's
+  // placeholder instantly (all inserted synchronously, back to back) while
+  // still controlling upload order separately — MessageInput needs the lead
+  // (captioned) file's request to land before the rest so the batch's real
+  // timestamps stay correctly ordered for grouping, without delaying the
+  // other tiles' on-screen placeholders until that request finishes.
+  const createFileMessagePlaceholder = useCallback((file: File, caption?: string, replyToMessageId?: string) => {
+    if (!conversationId || !user) return null;
+
+    const tempId = `temp-${generateId()}`;
+    const localUrl = URL.createObjectURL(file);
+    const isImage = file.type.startsWith('image/');
+    const optimisticMsg: ChatMessage = {
+      id: tempId,
+      conversationId,
+      senderId: user.id,
+      senderName: profile?.name || 'You',
+      senderInitials: profile?.initials || 'Y',
+      contentType: isImage ? 'image' : 'file',
+      content: caption || '',
+      attachments: [{
+        id: tempId,
+        name: file.name,
+        size: file.size,
+        type: file.type,
+        url: localUrl,
+      }],
+      createdAt: new Date().toISOString(),
+      isEdited: false,
+      isOptimistic: true,
+      status: 'sending',
+      replyToMessageId,
+    };
+
+    setMessages((prev) => [...prev, optimisticMsg]);
+    storeAddMessage(conversationId, optimisticMsg);
+    return { tempId, localUrl, optimisticMsg };
+  }, [conversationId, user, profile, storeAddMessage]);
+
+  const uploadFileMessagePlaceholder = useCallback(async (
+    placeholder: { tempId: string; localUrl: string; optimisticMsg: ChatMessage },
+    file: File,
+    caption?: string,
+    replyToMessageId?: string
+  ) => {
+    if (!conversationId) return;
+    const { tempId, localUrl, optimisticMsg } = placeholder;
+    try {
+      const realMsg = await chatService.sendFileMessage(conversationId, file, caption, replyToMessageId);
+      realMsg.status = 'sent';
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === realMsg.id)) {
+          return prev.filter((m) => m.id !== tempId);
+        }
+        return prev.map((m) => (m.id === tempId ? realMsg : m));
+      });
+      storeResolveOptimistic(conversationId, tempId, realMsg);
+      URL.revokeObjectURL(localUrl);
+    } catch (err) {
+      logger.error('Failed to send file message:', err);
+      const failedMsg = { ...optimisticMsg, status: 'failed' as const };
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? failedMsg : m)));
+      storeUpdateMessage(conversationId, tempId, () => failedMsg);
+      toast.error(`Failed to send ${file.name}`);
+      throw err;
+    }
+  }, [conversationId, storeResolveOptimistic, storeUpdateMessage]);
+
+  // Convenience one-shot wrapper (placeholder + upload) for callers sending a
+  // single file at a time — MessageInput's multi-file batch path uses the two
+  // phases above directly instead.
+  const sendFileMessage = useCallback(async (file: File, caption?: string, replyToMessageId?: string) => {
+    const placeholder = createFileMessagePlaceholder(file, caption, replyToMessageId);
+    if (!placeholder) return;
+    await uploadFileMessagePlaceholder(placeholder, file, caption, replyToMessageId);
+  }, [createFileMessagePlaceholder, uploadFileMessagePlaceholder]);
+
   useEffect(() => {
     if (!conversationId) return;
     const handleOnline = async () => {
@@ -576,14 +672,25 @@ export function useMessages(conversationId: string | null) {
 
   const loadMore = useCallback(async () => {
     if (!conversationId || !messages.length || !hasMore) return;
-    const oldest = messages[0];
+    // `messages` isn't guaranteed to be sorted oldest-first (the initial fetch
+    // stores the API's own order), so find the true oldest by timestamp rather
+    // than trusting messages[0] — using the wrong cursor here re-fetches
+    // messages near "now" instead of paging further back in history.
+    const oldest = messages.reduce((min, m) => (new Date(m.createdAt) < new Date(min.createdAt) ? m : min));
     const older = await chatService.getMessages(conversationId, {
       before: oldest.createdAt,
       limit: PAGE_SIZE,
     });
+    // The user may have switched to a different conversation while this
+    // request was in flight — discard the result instead of prepending
+    // another chat's messages into the now-active one.
+    if (activeConversationIdRef.current !== conversationId) return;
     const newHasMore = older.length === PAGE_SIZE;
     setHasMore(newHasMore);
-    setMessages((prev) => [...older, ...prev]);
+    setMessages((prev) => {
+      const existingIds = new Set(prev.map((m) => m.id));
+      return [...older.filter((m) => !existingIds.has(m.id)), ...prev];
+    });
     storeAppendOlder(conversationId, older, newHasMore);
   }, [conversationId, messages, hasMore, storeAppendOlder]);
 
@@ -601,11 +708,12 @@ export function useMessages(conversationId: string | null) {
     return result.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   }, [messages, pendingMessages, conversationId]);
 
-  return { messages: combinedMessages, loading, error, hasMore, loadMore, refetchMessages, sendMessage, readOnly, readOnlyNotice };
+  return { messages: combinedMessages, loading, error, hasMore, loadMore, refetchMessages, sendMessage, sendFileMessage, createFileMessagePlaceholder, uploadFileMessagePlaceholder, readOnly, readOnlyNotice };
 }
 
 export function useReactions(messages: ChatMessage[], currentUserId?: string, conversationId?: string | null) {
   const [reactionMap, setReactionMap] = useState<Record<string, MessageReaction[]>>({});
+  const messagesKey = (messages || []).map((m) => m.id).join(',');
 
   const fetchReactions = useCallback(async () => {
     if (!messages.length || !currentUserId) return;
@@ -617,7 +725,7 @@ export function useReactions(messages: ChatMessage[], currentUserId?: string, co
     } catch (err) {
       logger.error('Failed to fetch reactions:', err);
     }
-  }, [messages, currentUserId]);
+  }, [messagesKey, currentUserId]);
 
   useEffect(() => { fetchReactions(); }, [fetchReactions]);
 

@@ -104,6 +104,12 @@ export const queryKeys = {
     list: (projectId: string) => [...queryKeys.tags.all, 'list', projectId] as const,
   },
 
+  // Locations (org-wide registry backing the inventory Location picker)
+  locations: {
+    all: ['locations'] as const,
+    list: (orgId: string) => [...queryKeys.locations.all, 'list', orgId] as const,
+  },
+
   // Team
   team: {
     all: ['team'] as const,
@@ -188,10 +194,21 @@ export const queryKeys = {
     // filtered/unfiltered useECOList query, since RQ does partial-key matching.
     listRoot: (projectId: string) => ['ecos', 'list', projectId] as const,
     list:     (projectId: string, filters?: object) => ['ecos', 'list', projectId, filters] as const,
+    byPart:   (partId: string) => ['ecos', 'by-part', partId] as const,
     stats:    (projectId: string) => ['ecos', 'stats', projectId] as const,
     detail:   (ecoId: string) => ['ecos', 'detail', ecoId] as const,
     ecn:      (ecoId: string) => ['ecos', 'ecn', ecoId] as const,
   },
+  // Inventory
+  inventory: {
+    all:          ['inventory'] as const,
+    stock:        (orgId: string) => ['inventory', 'stock', orgId] as const,
+    orders:       (orgId: string) => ['inventory', 'orders', orgId] as const,
+    transactions: (orgId: string) => ['inventory', 'transactions', orgId] as const,
+    builds:       (orgId: string) => ['inventory', 'builds', orgId] as const,
+    buildBomLines: (orgId: string, buildId: string) => ['inventory', 'builds', orgId, buildId, 'bom-lines'] as const,
+  },
+
   supportLinks: {
     all:      ['support-links'] as const,
     listRoot: (projectId: string) => ['support-links', 'list', projectId] as const,

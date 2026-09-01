@@ -20,6 +20,30 @@ export const issuesService = {
   },
 
   /**
+   * Issues assigned to the current user across every project in an org, in
+   * one request — backs My Day. Replaces the previous per-project fan-out
+   * (see useMyDayTasks.ts), which fired one /projects/:id/issues/all call
+   * per project on every load.
+   */
+  async getMyIssues(
+    organizationId?: string,
+    options?: { includeResolved?: boolean; resolvedSince?: string }
+  ): Promise<Array<Issue & { projectName: string; projectCode: string | null }>> {
+    const params = new URLSearchParams();
+    if (organizationId) params.set('organizationId', organizationId);
+    if (options?.includeResolved) params.set('includeResolved', 'true');
+    else if (options?.resolvedSince) params.set('resolvedSince', options.resolvedSince);
+    const qs = params.toString();
+    const url = qs ? `${ENDPOINTS.ISSUES.MY_ALL}?${qs}` : ENDPOINTS.ISSUES.MY_ALL;
+    const data = await apiClient.get<Array<Record<string, unknown>>>(url);
+    return (data || []).map((raw) => ({
+      ...fromApiIssue(raw),
+      projectName: (raw.projectName as string) ?? '',
+      projectCode: (raw.projectCode as string) ?? null,
+    }));
+  },
+
+  /**
    * Get issue by ID
    */
   async getById(issueId: string): Promise<Issue | null> {
@@ -61,7 +85,15 @@ export const issuesService = {
     if (issue.checklist && issue.checklist.length > 0) payload.checklist = issue.checklist;
     if (issue.descriptionBlocks && issue.descriptionBlocks.length > 0) payload.descriptionBlocks = issue.descriptionBlocks;
     if (issue.videoLinks && issue.videoLinks.length > 0) payload.videoLinks = issue.videoLinks;
-    return apiClient.post<Issue>(ENDPOINTS.ISSUES.LIST(projectId), payload);
+    // Through fromApiIssue, not returned raw — the backend's create response
+    // carries blockedByTasks/blocksTasks as {id,title,status} objects, and
+    // only the adapter converts those into the blockedBy/blocksTaskIds string
+    // arrays the UI's dependency logic (IssuesView's isDependencyIssue)
+    // actually reads. Without it, useCreateIssue's optimistic cache insert
+    // has no blockedBy at all, so a just-created blocked issue renders in
+    // "Open" for a moment until the next refetch corrects it.
+    const raw = await apiClient.post<Record<string, unknown>>(ENDPOINTS.ISSUES.LIST(projectId), payload);
+    return fromApiIssue(raw);
   },
 
   /**

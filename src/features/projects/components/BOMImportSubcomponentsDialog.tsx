@@ -17,7 +17,7 @@ import {
 import {
   BOMNode, ApiPartResponse, ParsedImportRow,
   SUBCOMPONENT_IMPORT_COLUMNS, parseSubcomponentImportRows,
-  checkColumnMappingConfidence, applyColumnMapping, validateLevels,
+  checkColumnMappingConfidence, applyColumnMapping, validateLevels, validateDuplicateParts,
 } from './bomData';
 import { useOrgParts, useCreatePart } from '@/hooks/useParts';
 import { useCreateBomNode, useMapImportColumns, useFixImportRow } from '@/hooks/useBom';
@@ -37,8 +37,19 @@ interface Props {
   onClose: () => void;
   /** If null/undefined, parts are imported as top-level BOM nodes (no parent). */
   parentNode?: BOMNode | null;
+  /** The BOM's existing top-level nodes — only needed when parentNode is omitted,
+   *  so duplicate-part detection can see what's already there. */
+  rootNodes?: BOMNode[];
   projectId: string;
   orgId: string;
+  /**
+   * Called once import finishes with the ids of every node that now has
+   * newly-imported children (the dialog's parentNode, plus any intermediate
+   * level-0/1/... rows from a multi-level file). The BOM tree view collapses
+   * nodes by default, so without this the imported sub-components are created
+   * successfully but stay invisible until the user manually expands each row.
+   */
+  onImported?: (expandNodeIds: string[]) => void;
 }
 
 // Some spreadsheet exports (e.g. Altium BOM reports) prepend title/metadata
@@ -153,7 +164,7 @@ async function downloadTemplate() {
   URL.revokeObjectURL(url);
 }
 
-export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projectId, orgId }: Props) {
+export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, rootNodes, projectId, orgId, onImported }: Props) {
   const [stage, setStage] = useState<'upload' | 'preview' | 'result'>('upload');
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
@@ -315,7 +326,10 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
   };
 
   const levelIssues = validateLevels(parsedRows);
-  const validRows = parsedRows.filter(r => r.errors.length === 0 && !levelIssues.has(r.rowNumber));
+  const existingSiblings = parentNode ? (parentNode.children ?? []) : (rootNodes ?? []);
+  const duplicateIssues = validateDuplicateParts(parsedRows, levelIssues, existingSiblings);
+  const validRows = parsedRows.filter(r =>
+    r.errors.length === 0 && !levelIssues.has(r.rowNumber) && !duplicateIssues.has(r.rowNumber));
   const isMultiLevel = parsedRows.some(r => r.level > 0);
 
   const handleImport = async () => {
@@ -327,6 +341,10 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
     // which becomes the parentId for the next node at level N.
     // Index 0 is pre-seeded with the dialog's parentNode so level-0 rows attach correctly.
     const parentIdStack: (string | undefined)[] = [parentNode?.id ?? undefined];
+    // Every node that ends up with at least one imported child — the BOM tree view
+    // collapses nodes by default, so these need to be force-expanded after import
+    // or the newly-created sub-components are invisible until manually expanded.
+    const expandIds = new Set<string>();
 
     for (const row of validRows) {
       try {
@@ -346,7 +364,9 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
             distributor:         row.supplier || undefined,
             mpn:                 row.mpn || undefined,
             unit:                row.uom,
-            initialStatus:       row.status,
+            // The Part's initial revision has no 'draft'/'rejected' state —
+            // only the BOM node does.
+            initialStatus:       row.status === 'approved' ? 'approved' : 'pending',
             initialPrice:        row.unitPrice !== undefined ? row.unitPrice : undefined,
             initialLeadTimeDays: row.leadTimeWeeks !== undefined && row.leadTimeWeeks > 0 ? row.leadTimeWeeks * 7 : undefined,
           });
@@ -360,6 +380,8 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
           ownerId: user?.id,
         });
 
+        if (resolvedParentId) expandIds.add(resolvedParentId);
+
         // Register this node's id as the parent for the next deeper level.
         // Splice to clear any stale entries from a previously deeper branch.
         parentIdStack[level + 1] = node.id;
@@ -372,6 +394,8 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
       setProgress(p => ({ ...p, done: p.done + 1 }));
       setResults([...acc]);
     }
+
+    if (expandIds.size > 0) onImported?.([...expandIds]);
   };
 
   const importing = stage === 'result' && progress.done < progress.total;
@@ -467,8 +491,9 @@ export function BOMImportSubcomponentsDialog({ open, onClose, parentNode, projec
               <div className="space-y-1">
                 {parsedRows.map(row => {
                   const levelError = levelIssues.get(row.rowNumber);
-                  const isValid = row.errors.length === 0 && !levelError;
-                  const allErrors = levelError ? [...row.errors, levelError] : row.errors;
+                  const duplicateError = duplicateIssues.get(row.rowNumber);
+                  const isValid = row.errors.length === 0 && !levelError && !duplicateError;
+                  const allErrors = [...row.errors, ...(levelError ? [levelError] : []), ...(duplicateError ? [duplicateError] : [])];
                   return (
                     <div key={row.rowNumber}
                       style={isMultiLevel ? { paddingLeft: `${12 + row.level * 16}px` } : undefined}

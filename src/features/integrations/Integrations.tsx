@@ -24,12 +24,20 @@ import {
   FileSpreadsheet,
   CheckCircle2,
   Loader2,
+  ListTodo,
+  Calendar as CalendarIcon,
+  BarChart3,
+  LifeBuoy,
 } from 'lucide-react';
+import { useFeatureTogglesStore, type ToggleableFeature } from '@/stores/useFeatureTogglesStore';
+import { useSetFeatureToggle } from '@/hooks/useFeatureToggles';
 import { useGoogleMeetStore } from './stores/useGoogleMeetStore';
 import { useGoogleMeetStatus } from './hooks/useGoogleMeetStatus';
 import { googleMeetService } from '@/services/googleMeet.service';
 import { googleDriveService } from '@/services/googleDrive.service';
 import { useGoogleDriveStatus, useDisconnectGoogleDrive } from '@/hooks/useGoogleDrive';
+import { googleSheetsService } from '@/services/googleSheets.service';
+import { useGoogleSheetsOrgStatus, useDisconnectGoogleSheets } from '@/hooks/useGoogleSheets';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
@@ -41,6 +49,9 @@ interface Integration {
   description: string;
   logo: LogoSpec;
   color: string;
+  // Set only for sidebar features that are toggled on/off from here rather
+  // than "Coming soon" placeholders or OAuth connectors.
+  feature?: ToggleableFeature;
 }
 
 interface Section {
@@ -53,11 +64,28 @@ const SECTIONS: Section[] = [
     title: 'Features',
     items: [
       {
-        id: 'requirements',
-        name: 'Requirements',
-        description: 'Trace requirements through tasks, modules, and ECOs for full coverage.',
-        logo: { kind: 'icon', icon: ClipboardList },
-        color: '#2563EB',
+        id: 'my-tasks',
+        name: 'My Tasks',
+        description: 'A personal, cross-project view of everything assigned to you.',
+        logo: { kind: 'icon', icon: ListTodo },
+        color: '#7C3AED',
+        feature: 'my-tasks',
+      },
+      {
+        id: 'calendar',
+        name: 'Calendar',
+        description: 'See tasks, milestones, and due dates laid out across a calendar.',
+        logo: { kind: 'icon', icon: CalendarIcon },
+        color: '#DB2777',
+        feature: 'calendar',
+      },
+      {
+        id: 'reports',
+        name: 'Reports',
+        description: 'Roll up project progress, burndown, and team activity into reports.',
+        logo: { kind: 'icon', icon: BarChart3 },
+        color: '#0891B2',
+        feature: 'reports',
       },
       {
         id: 'inventory',
@@ -65,6 +93,22 @@ const SECTIONS: Section[] = [
         description: 'Track on-hand stock, allocations, and shortages against your BOMs.',
         logo: { kind: 'icon', icon: Boxes },
         color: '#D97706',
+        feature: 'inventory',
+      },
+      {
+        id: 'support',
+        name: 'Support',
+        description: 'Adds a Support API button to a project\'s Issues tab for managing customer-support intake links.',
+        logo: { kind: 'icon', icon: LifeBuoy },
+        color: '#DC2626',
+        feature: 'support',
+      },
+      {
+        id: 'requirements',
+        name: 'Requirements',
+        description: 'Trace requirements through tasks, modules, and ECOs for full coverage.',
+        logo: { kind: 'icon', icon: ClipboardList },
+        color: '#2563EB',
       },
       {
         id: 'gate-reviews',
@@ -72,6 +116,81 @@ const SECTIONS: Section[] = [
         description: 'Run structured design and program gate reviews with sign-off tracking.',
         logo: { kind: 'icon', icon: ShieldCheck },
         color: '#059669',
+      },
+    ],
+  },
+  {
+    title: 'Connectors',
+    items: [
+      {
+        id: 'google-meet',
+        name: 'Google Meet',
+        description: 'Have the power to access scheduled and instant audio or video calls at your fingertips.',
+        logo: { kind: 'image', src: googleMeetLogo, alt: 'Google Meet' },
+        color: '#00897B',
+      },
+      {
+        id: 'google-drive',
+        name: 'Google Drive',
+        description: "Store project files in your organization's own Google Drive instead of our servers.",
+        logo: { kind: 'image', src: googleDriveLogo, alt: 'Google Drive' },
+        color: '#0F9D58',
+      },
+      {
+        id: 'mcp',
+        name: 'MCP',
+        description: 'Connect Model Context Protocol servers to bring external tools and data in.',
+        logo: { kind: 'icon', icon: Network },
+        color: '#7C3AED',
+      },
+      {
+        id: 'google-sheets',
+        name: 'Google Sheets',
+        description: "Connect your Google account here, then link a spreadsheet from any project's BOM to sync with Pull/Push.",
+        logo: { kind: 'svg', path: LOGO_PATHS.googleSheets },
+        color: '#34A853',
+      },
+      {
+        id: 'excel',
+        name: 'Microsoft Excel',
+        description: 'Import and export BOMs, reports, and trackers as native Excel workbooks.',
+        logo: { kind: 'icon', icon: FileSpreadsheet },
+        color: '#217346',
+      },
+      {
+        id: 'jira',
+        name: 'Jira',
+        description: 'Link issues, epics, and sprints to projects, tasks, and ECOs.',
+        logo: { kind: 'svg', path: LOGO_PATHS.jira },
+        color: '#0052CC',
+      },
+      {
+        id: 'chatgpt',
+        name: 'ChatGPT',
+        description: "Bring OpenAI's GPT models into chat, automations, and document generation.",
+        logo: { kind: 'icon', icon: Bot },
+        color: '#74AA9C',
+      },
+      {
+        id: 'github',
+        name: 'GitHub',
+        description: 'Link commits, branches, and pull requests to issues and ECOs automatically.',
+        logo: { kind: 'svg', path: LOGO_PATHS.github },
+        color: '#181717',
+      },
+      {
+        id: 'claude',
+        name: 'Claude',
+        description: "Use Anthropic's Claude for AI-assisted planning, summaries, and task generation.",
+        logo: { kind: 'svg', path: LOGO_PATHS.claude },
+        color: '#D97757',
+      },
+      {
+        id: 'google-docs',
+        name: 'Google Docs',
+        description: 'Generate and link requirement documents and specs straight from Google Docs.',
+        logo: { kind: 'svg', path: LOGO_PATHS.googleDocs },
+        color: '#4285F4',
       },
     ],
   },
@@ -122,81 +241,6 @@ const SECTIONS: Section[] = [
       },
     ],
   },
-  {
-    title: 'Connectors',
-    items: [
-      {
-        id: 'google-meet',
-        name: 'Google Meet',
-        description: 'Have the power to access scheduled and instant audio or video calls at your fingertips.',
-        logo: { kind: 'image', src: googleMeetLogo, alt: 'Google Meet' },
-        color: '#00897B',
-      },
-      {
-        id: 'google-drive',
-        name: 'Google Drive',
-        description: "Store project files in your organization's own Google Drive instead of our servers.",
-        logo: { kind: 'image', src: googleDriveLogo, alt: 'Google Drive' },
-        color: '#0F9D58',
-      },
-      {
-        id: 'mcp',
-        name: 'MCP',
-        description: 'Connect Model Context Protocol servers to bring external tools and data in.',
-        logo: { kind: 'icon', icon: Network },
-        color: '#7C3AED',
-      },
-      {
-        id: 'google-sheets',
-        name: 'Google Sheets',
-        description: 'Sync project data, reports, and BOMs directly to and from Google Sheets.',
-        logo: { kind: 'svg', path: LOGO_PATHS.googleSheets },
-        color: '#34A853',
-      },
-      {
-        id: 'excel',
-        name: 'Microsoft Excel',
-        description: 'Import and export BOMs, reports, and trackers as native Excel workbooks.',
-        logo: { kind: 'icon', icon: FileSpreadsheet },
-        color: '#217346',
-      },
-      {
-        id: 'jira',
-        name: 'Jira',
-        description: 'Link issues, epics, and sprints to projects, tasks, and ECOs.',
-        logo: { kind: 'svg', path: LOGO_PATHS.jira },
-        color: '#0052CC',
-      },
-      {
-        id: 'chatgpt',
-        name: 'ChatGPT',
-        description: "Bring OpenAI's GPT models into chat, automations, and document generation.",
-        logo: { kind: 'icon', icon: Bot },
-        color: '#74AA9C',
-      },
-      {
-        id: 'github',
-        name: 'GitHub',
-        description: 'Link commits, branches, and pull requests to issues and ECOs automatically.',
-        logo: { kind: 'svg', path: LOGO_PATHS.github },
-        color: '#181717',
-      },
-      {
-        id: 'claude',
-        name: 'Claude',
-        description: "Use Anthropic's Claude for AI-assisted planning, summaries, and task generation.",
-        logo: { kind: 'svg', path: LOGO_PATHS.claude },
-        color: '#D97757',
-      },
-      {
-        id: 'google-docs',
-        name: 'Google Docs',
-        description: 'Generate and link requirement documents and specs straight from Google Docs.',
-        logo: { kind: 'svg', path: LOGO_PATHS.googleDocs },
-        color: '#4285F4',
-      },
-    ],
-  },
 ];
 
 export default function Integrations() {
@@ -206,6 +250,16 @@ export default function Integrations() {
   const { currentOrganization } = useOrganization();
   const isOrgAdmin = currentOrganization?.myRole === 'admin';
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // Google Sheets connects once per org, same as Drive/Meet below — each
+  // project then just links a spreadsheet from its own BOM, reusing this
+  // connection (see BOMPartSheet.tsx's Sourcing tab).
+  const enabledFeatures = useFeatureTogglesStore((s) => s.enabled);
+  const setFeatureEnabled = useSetFeatureToggle();
+
+  const { data: sheetsStatus, isLoading: isSheetsStatusLoading } = useGoogleSheetsOrgStatus(currentOrganization?.id);
+  const disconnectSheets = useDisconnectGoogleSheets(currentOrganization?.id);
+  const isSheetsConnected = !!sheetsStatus?.connected;
 
   const { data: driveStatus, isLoading: isDriveStatusLoading } = useGoogleDriveStatus(currentOrganization?.id);
   const disconnectDrive = useDisconnectGoogleDrive(currentOrganization?.id);
@@ -243,6 +297,30 @@ export default function Integrations() {
 
     const next = new URLSearchParams(searchParams);
     next.delete('drive');
+    next.delete('reason');
+    setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  // Handle the redirect back from the Google Sheets OAuth callback
+  // (?sheets=connected | ?sheets=error&reason=...) — same pattern as Drive above.
+  useEffect(() => {
+    const sheetsResult = searchParams.get('sheets');
+    if (!sheetsResult) return;
+
+    if (sheetsResult === 'connected') {
+      toast.success('Google Sheets connected — link a spreadsheet from any project\'s BOM to start syncing.');
+    } else if (sheetsResult === 'error') {
+      const reason = searchParams.get('reason');
+      toast.error(
+        reason === 'cancelled' || reason === 'access_denied'
+          ? 'Google Sheets connection was cancelled.'
+          : 'Failed to connect Google Sheets. Please try again.',
+      );
+    }
+
+    const next = new URLSearchParams(searchParams);
+    next.delete('sheets');
     next.delete('reason');
     setSearchParams(next, { replace: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -317,6 +395,27 @@ export default function Integrations() {
     }
   };
 
+  const handleConnectGoogleSheets = () => {
+    if (!currentOrganization) {
+      toast.error('Select an organization first.');
+      return;
+    }
+    if (!isOrgAdmin) {
+      toast.error('Only an organization admin can connect Google Sheets.');
+      return;
+    }
+    // Full page navigation (not a fetch) — same reasoning as Drive above.
+    window.location.href = googleSheetsService.getConnectUrl(currentOrganization.id);
+  };
+
+  const handleDisconnectGoogleSheets = () => {
+    if (!isOrgAdmin) {
+      toast.error('Only an organization admin can disconnect Google Sheets.');
+      return;
+    }
+    disconnectSheets.mutate();
+  };
+
   const grouped = useMemo(() => {
     const query = search.trim().toLowerCase();
     return SECTIONS.map((section) => ({
@@ -351,6 +450,9 @@ export default function Integrations() {
               {section.items.map((integration) => {
                 const isGoogleMeet = integration.id === 'google-meet';
                 const isGoogleDrive = integration.id === 'google-drive';
+                const isGoogleSheets = integration.id === 'google-sheets';
+                const isFeatureToggle = !!integration.feature;
+                const isFeatureEnabled = integration.feature ? enabledFeatures[integration.feature] : false;
 
                 return (
                   <Card key={integration.id} className="relative overflow-hidden">
@@ -392,6 +494,28 @@ export default function Integrations() {
                               Available
                             </Badge>
                           )
+                        ) : isGoogleSheets ? (
+                          isSheetsConnected ? (
+                            <Badge variant="outline" className="gap-1 text-[11px] border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Connected
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[11px]">
+                              Available
+                            </Badge>
+                          )
+                        ) : isFeatureToggle ? (
+                          isFeatureEnabled ? (
+                            <Badge variant="outline" className="gap-1 text-[11px] border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3 w-3" />
+                              Enabled
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-[11px]">
+                              Available
+                            </Badge>
+                          )
                         ) : (
                           <Badge variant="secondary" className="gap-1 text-[11px]">
                             <Clock className="h-3 w-3" />
@@ -405,6 +529,8 @@ export default function Integrations() {
                           ? `Connected as ${meetEmail}`
                           : isGoogleDrive && isDriveConnected && driveStatus?.email
                           ? `Connected as ${driveStatus.email}`
+                          : isGoogleSheets && isSheetsConnected && sheetsStatus?.email
+                          ? `Connected as ${sheetsStatus.email}`
                           : integration.description}
                       </p>
 
@@ -450,6 +576,50 @@ export default function Integrations() {
                             title={!isOrgAdmin ? 'Only an organization admin can connect Google Drive' : undefined}
                           >
                             Connect
+                          </Button>
+                        )
+                      ) : isGoogleSheets ? (
+                        isSheetsConnected ? (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="mt-4 w-full"
+                            onClick={handleDisconnectGoogleSheets}
+                            disabled={!isOrgAdmin || disconnectSheets.isPending}
+                            title={!isOrgAdmin ? 'Only an organization admin can disconnect Google Sheets' : undefined}
+                          >
+                            {disconnectSheets.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Disconnect'}
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="mt-4 w-full"
+                            onClick={handleConnectGoogleSheets}
+                            disabled={!isOrgAdmin || isSheetsStatusLoading}
+                            title={!isOrgAdmin ? 'Only an organization admin can connect Google Sheets' : undefined}
+                          >
+                            Connect
+                          </Button>
+                        )
+                      ) : isFeatureToggle ? (
+                        isFeatureEnabled ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-4 w-full"
+                            onClick={() => setFeatureEnabled(integration.feature!, false)}
+                          >
+                            Disable
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="mt-4 w-full"
+                            onClick={() => setFeatureEnabled(integration.feature!, true)}
+                          >
+                            Enable
                           </Button>
                         )
                       ) : (

@@ -19,12 +19,16 @@ export interface CreatePartDto {
   mpn?: string;
   unit?: string;
   notes?: string;
-  // Initial revision overrides
-  initialStatus?: BOMStatus;
+  imageUrl?: string | null;
+  // Initial revision overrides (the revision itself only ever has these two
+  // states — 'draft'/'rejected' exist only at the BOM-node level)
+  initialStatus?: 'approved' | 'pending';
   initialRev?: string;
   initialPrice?: number;
   initialLeadTimeDays?: number;
   initialSuppliers?: SupplierEntry[];
+  /** "Additional Fields" — accepted on create, not only on update. */
+  customFields?: CustomFieldEntry[] | null;
 }
 
 export interface CustomFieldEntry {
@@ -32,9 +36,7 @@ export interface CustomFieldEntry {
   value: string;
 }
 
-export type UpdatePartDto = Partial<Omit<CreatePartDto, 'partNumber'>> & {
-  customFields?: CustomFieldEntry[] | null;
-};
+export type UpdatePartDto = Partial<Omit<CreatePartDto, 'partNumber'>>;
 
 export interface CreateRevisionDto {
   rev: string;
@@ -44,6 +46,8 @@ export interface CreateRevisionDto {
   price?: number;
   leadTimeDays?: number;
   ecoId?: string;
+  description?: string;
+  category?: BOMCategory;
   suppliers?: SupplierEntry[];
 }
 
@@ -64,7 +68,7 @@ export const partsService = {
     if (params?.limit)    query.set('limit', String(params.limit));
     const qs = query.toString();
     const url = qs ? `${ENDPOINTS.PARTS.LIST(orgId)}?${qs}` : ENDPOINTS.PARTS.LIST(orgId);
-    return apiClient.get<ListPartsResult>(url);
+    return apiClient.raw.get(url).then((r) => ({ data: r.data.data, meta: r.data.meta }));
   },
 
   async create(orgId: string, dto: CreatePartDto): Promise<ApiPartResponse> {

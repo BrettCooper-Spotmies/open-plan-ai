@@ -1,8 +1,9 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { format, parseISO, startOfDay } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { LinkHighlightTextarea } from '@/components/ui/LinkHighlightTextarea';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -33,8 +34,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import { cn, getDisplayId } from '@/lib/utils';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { renamePastedImageFile } from '@/utils/pastedFile';
 import { FilePreviewDialog, FilePreviewTarget, getVideoThumbnail } from '@/components/FilePreviewDialog';
 import {
     Calendar as CalendarIcon,
@@ -92,6 +94,7 @@ import {
     VideoLink,
 } from '@/types';
 import { SlashBlockEditor, EditorBlock } from '@/components/ui/SlashBlockEditor';
+import { blocksToPlainText, hasBlockContent, plainTextToBlocks } from '@/lib/descriptionBlocks';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { ISSUE_SEVERITY_DISPLAY, ISSUE_SEVERITY_OPTIONS } from './issueSeverity';
@@ -99,7 +102,7 @@ import { formatModifiedFields } from './modifiedFields';
 import { attachmentsService } from '@/services/attachments.service';
 import { commentsService } from '@/services/comments.service';
 import { useAuth } from '@/contexts/AuthContext';
-import { useProjectTags, useCreateTag } from '@/hooks/useProjectTags';
+import { useProjectTags, useCreateTag, useDeleteTag } from '@/hooks/useProjectTags';
 import { getFallbackTagColor } from '@/lib/tagColors';
 import { useIssueColumns } from '@/hooks/useIssueColumns';
 import { DEFAULT_ISSUE_COLUMNS } from '@/services/issueColumns.service';
@@ -120,12 +123,18 @@ interface IssueDetailContentProps {
     onPendingFilesChange?: (files: File[]) => void;
     /** Shown as a read-only "Project" field when provided. Only pass this from contexts (like My Day) where the issue's project isn't already implied by the surrounding page. */
     projectName?: string;
+    /** Project's short display-ID prefix — renders a "{projectCode}-I-{number}" pill next to the title when both this and the issue's number are available. */
+    projectCode?: string;
     /**
      * Controls the mobile read-only/edit-mode gate. Omit to leave fields always editable
      * (e.g. the full-page IssuePage route, which has no "Edit" affordance of its own).
      * When provided (from IssueDetailModal's mobile "..." menu), fields stay locked until true.
      */
     isMobileEditMode?: boolean;
+}
+
+export interface IssueDetailContentHandle {
+    commitPendingComments: () => Promise<void>;
 }
 
 
@@ -152,12 +161,39 @@ const formatFileSize = (bytes: number) => {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 };
 
+const serializeIssueForDirtyCheck = (issue: Issue): string => {
+    const attachmentSnapshot = (issue.attachments || [])
+        .map(a => ({ id: a.id, filename: a.filename, fileType: a.fileType, fileSize: a.fileSize, url: a.url }))
+        .sort((a, b) => a.id.localeCompare(b.id));
+
+    return JSON.stringify({
+        title: issue.title || '',
+        description: issue.description || '',
+        descriptionBlocks: issue.descriptionBlocks || null,
+        category: issue.category,
+        categoryOther: issue.categoryOther || '',
+        severity: issue.severity,
+        status: issue.status,
+        moduleId: issue.moduleId || null,
+        dueDate: issue.dueDate || null,
+        resolution: issue.resolution || '',
+        assigneeIds: (issue.assignees || []).map(a => a.id).sort(),
+        tags: [...(issue.tags || [])].sort(),
+        blockedBy: [...(issue.blockedBy || [])].sort(),
+        blocksTaskIds: [...(issue.blocksTaskIds || [])].sort(),
+        checklist: issue.checklist || [],
+        comments: issue.comments || [],
+        videoLinks: issue.videoLinks || [],
+        attachments: attachmentSnapshot,
+    });
+};
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Draft issues use a client-generated `issue-${Date.now()}` id until the create
 // mutation resolves — guard against firing comment/attachment fetches with it.
 const isUuid = (id: string) => UUID_REGEX.test(id);
 
-export function IssueDetailContent({
+export const IssueDetailContent = forwardRef<IssueDetailContentHandle, IssueDetailContentProps>(function IssueDetailContent({
     issue,
     tasks = [],
     teamMembers = [],
@@ -170,8 +206,9 @@ export function IssueDetailContent({
     mode = 'view',
     onPendingFilesChange,
     projectName,
+    projectCode,
     isMobileEditMode,
-}: IssueDetailContentProps) {
+}, ref) {
     const { user: profile } = useAuth();
     const isMobile = useIsMobile();
     const isMobileLayout = isMobile && mode !== 'create';
@@ -179,11 +216,17 @@ export function IssueDetailContent({
     // and hasn't switched it on yet. Uncontrolled callers (e.g. IssuePage) stay always-editable.
     const isMobileFieldsLocked = isMobileLayout && isMobileEditMode === false;
     const [editedIssue, setEditedIssue] = useState<Issue | null>(issue);
+    // Snapshot of the issue as it was when this dialog instance mounted — never
+    // updated afterward — so we can tell whether the user actually changed
+    // anything before firing an update + success toast on a no-op Save.
+    const initialIssueSnapshotRef = useRef(issue ? serializeIssueForDirtyCheck(issue) : '');
     const [failedThumbnails, setFailedThumbnails] = useState<Set<string>>(new Set());
     const [newComment, setNewComment] = useState('');
     const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
     const [editingCommentValue, setEditingCommentValue] = useState('');
-    const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+    const [pendingNewCommentIds, setPendingNewCommentIds] = useState<Set<string>>(new Set());
+    const [pendingEditedComments, setPendingEditedComments] = useState<Map<string, string>>(new Map());
+    const [pendingDeletedCommentIds, setPendingDeletedCommentIds] = useState<Set<string>>(new Set());
     const [isAssigneePopoverOpen, setIsAssigneePopoverOpen] = useState(false);
     const [isBlockingTaskPopoverOpen, setIsBlockingTaskPopoverOpen] = useState(false);
     const [isBlockedByTaskPopoverOpen, setIsBlockedByTaskPopoverOpen] = useState(false);
@@ -200,13 +243,13 @@ export function IssueDetailContent({
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [previewingFile, setPreviewingFile] = useState<FilePreviewTarget | null>(null);
     const [pendingFiles, setPendingFiles] = useState<File[]>([]);
-    const [pendingFileUrls, setPendingFileUrls] = useState<(string | null)[]>([]);
+    const [pendingFileUrls, setPendingFileUrls] = useState<string[]>([]);
     const [videoLinkInput, setVideoLinkInput] = useState('');
 
     useEffect(() => {
-        const urls = pendingFiles.map(f => f.type.startsWith('image/') ? URL.createObjectURL(f) : null);
+        const urls = pendingFiles.map(f => URL.createObjectURL(f));
         setPendingFileUrls(urls);
-        return () => { urls.forEach(url => { if (url) URL.revokeObjectURL(url); }); };
+        return () => { urls.forEach(url => URL.revokeObjectURL(url)); };
     }, [pendingFiles]);
 
     const projectId = issue?.projectId;
@@ -233,6 +276,34 @@ export function IssueDetailContent({
 
     const { data: projectTags = [] } = useProjectTags(projectId);
     const createTagMutation = useCreateTag(projectId);
+    // A tag leaves the project registry only when nothing references it —
+    // deleting one still attached would strip it from every task and issue
+    // silently, so those are refused with a message naming what holds it.
+    // The backend enforces the same rule.
+    const deleteTagMutation = useDeleteTag(projectId);
+    const [tagPendingDelete, setTagPendingDelete] = useState<{ id: string; name: string } | null>(null);
+
+    const requestTagDelete = (e: React.MouseEvent, tagName: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const registryTag = projectTags.find((t) => t.name.toLowerCase() === tagName.toLowerCase());
+        if (!registryTag) {
+            toast.error(`"${tagName}" isn't a saved project tag yet`);
+            return;
+        }
+        const { taskCount, issueCount } = registryTag;
+        if (taskCount > 0 || issueCount > 0) {
+            const parts = [
+                taskCount > 0 ? `${taskCount} task${taskCount === 1 ? '' : 's'}` : null,
+                issueCount > 0 ? `${issueCount} issue${issueCount === 1 ? '' : 's'}` : null,
+            ].filter(Boolean);
+            toast.error(`"${registryTag.name}" is still in use`, {
+                description: `Attached to ${parts.join(' and ')}. Remove it there before deleting the tag.`,
+            });
+            return;
+        }
+        setTagPendingDelete({ id: registryTag.id, name: registryTag.name });
+    };
     const tagColorMap = useMemo(() => {
         const map = new Map<string, string>();
         projectTags.forEach((t) => map.set(t.name.toLowerCase(), t.color));
@@ -245,20 +316,34 @@ export function IssueDetailContent({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pendingFiles]);
 
-    useEffect(() => {
+    // useLayoutEffect (not useEffect) for both of the effects below — this
+    // component instance is reused across different issues opened one after
+    // another (only the `issue` prop changes), and the outer modal that seeds
+    // it now also resets synchronously via useLayoutEffect. A regular
+    // useEffect here runs after paint, so there'd still be a frame showing
+    // the PREVIOUS issue's title/description/advanced-mode state before this
+    // catches up — a visible flash when switching issues quickly.
+    useLayoutEffect(() => {
         if (issue) {
-            // Preserve loaded comments — they're fetched separately via API
-            setEditedIssue(prev => ({ ...issue, comments: prev?.comments ?? issue.comments ?? [] }));
+            // Preserve loaded comments only when staying on the same issue —
+            // they're fetched separately via API and would otherwise leak
+            // stale comments into a newly opened/created issue.
+            setEditedIssue(prev => ({
+                ...issue,
+                comments: prev && prev.id === issue.id ? (prev.comments ?? issue.comments ?? []) : (issue.comments ?? []),
+            }));
         }
     }, [issue]);
 
-    useEffect(() => {
-        // Auto-enable advanced description if the loaded issue already has blocks.
+    useLayoutEffect(() => {
+        // Set advanced-description mode from the loaded issue's own data — on if
+        // it has blocks, off otherwise. This component instance is reused across
+        // different issues (only the `issue` prop changes), so without the
+        // unconditional else branch, toggling it on for one issue would leak into
+        // every issue opened afterward instead of reflecting each issue's own state.
         // Keyed on issue id (not the whole issue object) so this only runs when
         // switching issues, not on every keystroke while editing a draft.
-        if (issue?.descriptionBlocks && issue.descriptionBlocks.length > 0) {
-            setIsAdvancedDescription(true);
-        }
+        setIsAdvancedDescription(!!(issue?.descriptionBlocks && issue.descriptionBlocks.length > 0));
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [issue?.id]);
 
@@ -313,17 +398,63 @@ export function IssueDetailContent({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [issue?.id, mode]);
 
+    const isIssueDirty = useMemo(
+        () => !!editedIssue && initialIssueSnapshotRef.current !== '' && serializeIssueForDirtyCheck(editedIssue) !== initialIssueSnapshotRef.current,
+        [editedIssue]
+    );
+
     if (!editedIssue) return null;
 
-    const handleFieldChange = <K extends keyof Issue>(field: K, value: Issue[K]) => {
+    const handleFieldsChange = (patch: Partial<Issue>) => {
         setEditedIssue(prev => {
             if (!prev) return prev;
-            const updated = { ...prev, [field]: value };
+            const updated = { ...prev, ...patch };
             if (isDraft) {
                 onUpdate(updated);
             }
             return updated;
         });
+    };
+
+    const handleFieldChange = <K extends keyof Issue>(field: K, value: Issue[K]) => {
+        handleFieldsChange({ [field]: value } as Partial<Issue>);
+    };
+
+    // Advanced blocks are the source of truth while the toggle is on, but the
+    // plain `description` is what every card, list and preview renders — so
+    // mirror the flattened text across on every block edit. Without it an
+    // advanced-only edit saved fine yet showed up nowhere, which reads as
+    // "the update didn't happen".
+    const handleDescriptionBlocksChange = (blocks: EditorBlock[]) => {
+        handleFieldsChange({
+            descriptionBlocks: blocks,
+            description: blocksToPlainText(blocks),
+        });
+    };
+
+    const handleAdvancedDescriptionToggle = (enabled: boolean) => {
+        if (enabled) {
+            // Carry whatever is in the plain box into the editor instead of
+            // dropping the user in front of an empty one.
+            if (!hasBlockContent(editedIssue.descriptionBlocks as EditorBlock[] | undefined)) {
+                const seeded = plainTextToBlocks(editedIssue.description);
+                if (seeded.length > 0) {
+                    handleFieldsChange({
+                        descriptionBlocks: seeded,
+                        description: blocksToPlainText(seeded),
+                    });
+                }
+            }
+        } else {
+            // Going back to simple mode: keep the text, drop the blocks — a
+            // record that still has blocks reopens in advanced mode.
+            const flattened = blocksToPlainText(editedIssue.descriptionBlocks as EditorBlock[] | undefined);
+            handleFieldsChange({
+                description: flattened || editedIssue.description || '',
+                descriptionBlocks: [],
+            });
+        }
+        setIsAdvancedDescription(enabled);
     };
 
     const checklist = editedIssue.checklist || [];
@@ -482,7 +613,7 @@ export function IssueDetailContent({
         for (const item of Array.from(items)) {
             if (item.kind === 'file' && item.type.startsWith('image/')) {
                 const file = item.getAsFile();
-                if (file) imageFiles.push(file);
+                if (file) imageFiles.push(renamePastedImageFile(file, imageFiles.length));
             }
         }
         if (imageFiles.length === 0) return;
@@ -572,49 +703,25 @@ export function IssueDetailContent({
 
     const getTaskById = (id: string) => tasks.find(t => t.id === id);
 
+    // Comment add/edit/delete are staged locally only; they're persisted to the DB
+    // via commitPendingComments(), which fires when the real "Update"/"Save" action runs.
     const handleAddComment = async () => {
         if (!newComment.trim()) return;
         const content = newComment.trim();
         setNewComment('');
 
+        const newCommentId = `comment-${Date.now()}`;
+        const newCommentObj: Comment = {
+            id: newCommentId,
+            content,
+            author: profile
+                ? { id: profile.id, name: profile.name || profile.email, initials: profile.initials || '?', avatar: profile.avatarUrl || undefined, email: profile.email, role: profile.role || 'member' }
+                : { id: 'unknown', name: 'Unknown User', initials: '?', email: '', role: 'member' },
+            createdAt: new Date().toISOString(),
+        };
+        handleFieldChange('comments', [...comments, newCommentObj]);
         if (mode !== 'create' && issue?.id && isUuid(issue.id)) {
-            try {
-                const dbComment = await commentsService.create({
-                    content,
-                    entity_id: issue.id,
-                    entity_type: 'issue',
-                });
-                const newCommentObj: Comment = {
-                    id: dbComment.id,
-                    content: dbComment.content,
-                    author: {
-                        id: dbComment.author?.id || profile?.id || '',
-                        name: dbComment.author?.name || profile?.name || 'You',
-                        initials: dbComment.author?.initials || profile?.initials || '?',
-                        avatar: dbComment.author?.avatarUrl || undefined,
-                        email: profile?.email || '',
-                        role: 'member',
-                    },
-                    createdAt: dbComment.createdAt || new Date().toISOString(),
-                };
-                setEditedIssue(prev => {
-                    if (!prev) return prev;
-                    return { ...prev, comments: [...(prev.comments || []), newCommentObj] };
-                });
-            } catch {
-                setNewComment(content);
-                toast.error('Failed to add comment');
-            }
-        } else {
-            const newCommentObj: Comment = {
-                id: `comment-${Date.now()}`,
-                content,
-                author: profile
-                    ? { id: profile.id, name: profile.name || profile.email, initials: profile.initials || '?', avatar: profile.avatarUrl || undefined, email: profile.email, role: profile.role || 'member' }
-                    : { id: 'unknown', name: 'Unknown User', initials: '?', email: '', role: 'member' },
-                createdAt: new Date().toISOString(),
-            };
-            handleFieldChange('comments', [...comments, newCommentObj]);
+            setPendingNewCommentIds(prev => new Set(prev).add(newCommentId));
         }
     };
 
@@ -633,45 +740,70 @@ export function IssueDetailContent({
         const commentId = editingCommentId;
         const content = editingCommentValue.trim();
 
-        if (mode !== 'create') {
-            try {
-                await commentsService.update(commentId, content);
-            } catch {
-                toast.error('Failed to update comment');
-                return;
-            }
+        handleFieldChange('comments', comments.map(c => c.id === commentId ? { ...c, content } : c));
+        if (mode !== 'create' && !pendingNewCommentIds.has(commentId)) {
+            setPendingEditedComments(prev => new Map(prev).set(commentId, content));
         }
-
-        setEditedIssue(prev => {
-            if (!prev) return prev;
-            return {
-                ...prev,
-                comments: (prev.comments || []).map(c => c.id === commentId ? { ...c, content } : c),
-            };
-        });
         setEditingCommentId(null);
         setEditingCommentValue('');
     };
 
-    const handleDeleteComment = async () => {
-        if (!deletingCommentId) return;
-        const commentId = deletingCommentId;
-        setDeletingCommentId(null);
+    const handleDeleteComment = async (commentId: string) => {
+        if (pendingNewCommentIds.has(commentId)) {
+            setPendingNewCommentIds(prev => {
+                const next = new Set(prev);
+                next.delete(commentId);
+                return next;
+            });
+        } else if (mode !== 'create') {
+            setPendingDeletedCommentIds(prev => new Set(prev).add(commentId));
+        }
+        setPendingEditedComments(prev => {
+            if (!prev.has(commentId)) return prev;
+            const next = new Map(prev);
+            next.delete(commentId);
+            return next;
+        });
 
-        if (mode !== 'create') {
+        handleFieldChange('comments', comments.filter(c => c.id !== commentId));
+    };
+
+    const commitPendingComments = async () => {
+        if (mode === 'create' || !issue?.id || !isUuid(issue.id)) return;
+
+        for (const id of pendingDeletedCommentIds) {
             try {
-                await commentsService.delete(commentId);
+                await commentsService.delete(id);
             } catch {
                 toast.error('Failed to delete comment');
-                return;
             }
         }
-
-        setEditedIssue(prev => {
-            if (!prev) return prev;
-            return { ...prev, comments: (prev.comments || []).filter(c => c.id !== commentId) };
-        });
+        for (const [id, content] of pendingEditedComments) {
+            try {
+                await commentsService.update(id, content);
+            } catch {
+                toast.error('Failed to update comment');
+            }
+        }
+        for (const id of pendingNewCommentIds) {
+            const comment = (editedIssue?.comments || []).find(c => c.id === id);
+            if (!comment) continue;
+            try {
+                await commentsService.create({
+                    content: comment.content,
+                    entity_id: issue.id,
+                    entity_type: 'issue',
+                });
+            } catch {
+                toast.error('Failed to add comment');
+            }
+        }
+        setPendingDeletedCommentIds(new Set());
+        setPendingEditedComments(new Map());
+        setPendingNewCommentIds(new Set());
     };
+
+    useImperativeHandle(ref, () => ({ commitPendingComments }));
 
     return (
         <div className="flex flex-col h-full bg-background">
@@ -680,6 +812,11 @@ export function IssueDetailContent({
                 {isMobileLayout && projectName && (
                     <p className="text-xs text-muted-foreground">
                         {projectName} <span className="mx-1">›</span> Board
+                        {getDisplayId(projectCode, 'I', editedIssue?.number) && (
+                            <span className="ml-2 font-mono font-semibold text-blue-500">
+                                {getDisplayId(projectCode, 'I', editedIssue?.number)}
+                            </span>
+                        )}
                     </p>
                 )}
                 <div className="flex items-start justify-between gap-4">
@@ -705,6 +842,26 @@ export function IssueDetailContent({
                 </div>
 
                 <ConfirmationDialog
+                    open={!!tagPendingDelete}
+                    onOpenChange={(open) => { if (!open) setTagPendingDelete(null); }}
+                    onConfirm={async () => {
+                        if (!tagPendingDelete) return;
+                        const { id, name } = tagPendingDelete;
+                        setTagPendingDelete(null);
+                        try {
+                            await deleteTagMutation.mutateAsync(id);
+                            toast.success(`Tag "${name}" deleted`);
+                        } catch {
+                            /* useDeleteTag surfaces the server message */
+                        }
+                    }}
+                    title="Delete tag"
+                    description={`"${tagPendingDelete?.name ?? ''}" isn't used by any task or issue. Deleting removes it from this project's tag list.`}
+                    confirmText="Delete"
+                    variant="destructive"
+                />
+
+                <ConfirmationDialog
                     open={showDeleteConfirm}
                     onOpenChange={setShowDeleteConfirm}
                     onConfirm={() => {
@@ -713,16 +870,6 @@ export function IssueDetailContent({
                     }}
                     title="Delete Issue"
                     description="Are you sure you want to delete this issue? This action cannot be undone."
-                    confirmText="Delete"
-                    variant="destructive"
-                />
-
-                <ConfirmationDialog
-                    open={!!deletingCommentId}
-                    onOpenChange={(open) => !open && setDeletingCommentId(null)}
-                    onConfirm={handleDeleteComment}
-                    title="Delete Comment"
-                    description="Are you sure you want to delete this comment? This action cannot be undone."
                     confirmText="Delete"
                     variant="destructive"
                 />
@@ -802,7 +949,7 @@ export function IssueDetailContent({
                                     {(editedIssue.assignees || []).length > 0 && (
                                         <div className="p-2 border-b">
                                             <p className="text-xs font-medium text-muted-foreground px-2 mb-1">Assigned</p>
-                                            {(editedIssue.assignees || []).map((assignee) => (
+                                            {[...(editedIssue.assignees || [])].sort((a, b) => a.name.localeCompare(b.name)).map((assignee) => (
                                                 <div key={assignee.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted group">
                                                     <Avatar className="h-6 w-6 shrink-0">
                                                         <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
@@ -842,6 +989,7 @@ export function IssueDetailContent({
                                             <CommandGroup heading="Add members">
                                                 {teamMembers
                                                     .filter(m => !editedIssue.assignees?.some(a => a.id === m.id))
+                                                    .sort((a, b) => a.name.localeCompare(b.name))
                                                     .map((member) => (
                                                         <CommandItem
                                                             key={member.id}
@@ -849,13 +997,13 @@ export function IssueDetailContent({
                                                             onSelect={() => {
                                                                 handleFieldChange('assignees', [...(editedIssue.assignees || []), member]);
                                                             }}
-                                                            className="cursor-pointer"
+                                                            className="cursor-pointer items-start"
                                                         >
-                                                            <Avatar className="h-5 w-5 mr-2">
+                                                            <Avatar className="h-5 w-5 mr-2 mt-0.5 shrink-0">
                                                                 <AvatarImage src={resolveFileUrl(member.avatar) ?? member.avatar} alt={member.name} />
                                                                 <AvatarFallback className="text-[9px]">{member.initials}</AvatarFallback>
                                                             </Avatar>
-                                                            {member.name}
+                                                            <span className="min-w-0">{member.name}</span>
                                                         </CommandItem>
                                                     ))}
                                             </CommandGroup>
@@ -1316,10 +1464,19 @@ export function IssueDetailContent({
                                                                 setIsTagPopoverOpen(false);
                                                                 setTagSearch('');
                                                             }}
-                                                            className="cursor-pointer flex items-center gap-2"
+                                                            className="cursor-pointer flex items-center gap-2 group/tag"
                                                         >
                                                             <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
-                                                            <span>{item.name}</span>
+                                                            <span className="flex-1 truncate">{item.name}</span>
+                                                            <button
+                                                                type="button"
+                                                                aria-label={`Delete tag ${item.name}`}
+                                                                title="Delete tag from this project"
+                                                                className="shrink-0 rounded p-0.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus:opacity-100 group-hover/tag:opacity-100"
+                                                                onClick={(e) => requestTagDelete(e, item.name)}
+                                                            >
+                                                                <Trash2 className="h-3.5 w-3.5" />
+                                                            </button>
                                                         </CommandItem>
                                                     ))}
                                             </CommandList>
@@ -1402,7 +1559,7 @@ export function IssueDetailContent({
                                 <Switch
                                     id="advanced-mode"
                                     checked={isAdvancedDescription}
-                                    onCheckedChange={setIsAdvancedDescription}
+                                    onCheckedChange={handleAdvancedDescriptionToggle}
                                     disabled={!canEditIssueFields}
                                     className={cn(isMobileLayout && 'disabled:opacity-100 disabled:cursor-pointer', isMobileLayout && !canEditIssue && 'opacity-60')}
                                 />
@@ -1418,11 +1575,11 @@ export function IssueDetailContent({
                                     key={editedIssue.id}
                                     readOnly={!canEditIssueFields}
                                     initialBlocks={editedIssue.descriptionBlocks}
-                                    onChange={(blocks) => handleFieldChange('descriptionBlocks', blocks)}
+                                    onChange={handleDescriptionBlocksChange}
                                 />
                             </div>
                         ) : (
-                            <Textarea
+                            <LinkHighlightTextarea
                                 value={editedIssue.description}
                                 onChange={(e) => handleFieldChange('description', e.target.value)}
                                 placeholder="Describe the issue in detail..."
@@ -1673,15 +1830,8 @@ export function IssueDetailContent({
                                         return (
                                             <div
                                                 key={i}
-                                                className={cn(
-                                                    "flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm",
-                                                    isImage && previewUrl && "cursor-pointer hover:bg-muted"
-                                                )}
-                                                onClick={() => {
-                                                    if (isImage && previewUrl) {
-                                                        setPreviewingFile({ url: previewUrl, fileName: f.name, mimeType: f.type });
-                                                    }
-                                                }}
+                                                className="flex items-center justify-between gap-2 px-3 py-2 rounded-md border bg-muted/30 text-sm cursor-pointer hover:bg-muted"
+                                                onClick={() => setPreviewingFile({ url: previewUrl, fileName: f.name, mimeType: f.type })}
                                             >
                                                 <div className="flex items-center gap-2 min-w-0">
                                                     {isImage && previewUrl ? (
@@ -1757,6 +1907,25 @@ export function IssueDetailContent({
                         </h3>
 
                         <div className="space-y-2">
+                            <div className="flex gap-2">
+                                <Input
+                                    placeholder="Paste video URL…"
+                                    value={videoLinkInput}
+                                    onChange={(e) => setVideoLinkInput(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
+                                    className="text-sm"
+                                />
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    onClick={handleAddVideoLink}
+                                    disabled={!videoLinkInput.trim()}
+                                    className="shrink-0"
+                                >
+                                    <Plus className="h-4 w-4" />
+                                </Button>
+                            </div>
+
                             {videoLinks.map((vl) => {
                                 const thumbnail = getVideoThumbnail(vl.url);
                                 return (
@@ -1814,27 +1983,6 @@ export function IssueDetailContent({
                                     ))}
                                 </div>
                             )}
-
-                            <div className="flex gap-2">
-                                <Input
-                                    placeholder="Paste video URL…"
-                                    value={videoLinkInput}
-                                    onChange={(e) => setVideoLinkInput(e.target.value)}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddVideoLink(); } }}
-                                    className="text-sm"
-                                />
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleAddVideoLink}
-                                    disabled={!videoLinkInput.trim()}
-                                    className="shrink-0"
-                                >
-                                    <Plus className="h-4 w-4 mr-1" />
-                                    Add
-                                </Button>
-                            </div>
                         </div>
                     </section>
 
@@ -2053,14 +2201,14 @@ export function IssueDetailContent({
                                                 {comment.author.initials}
                                             </AvatarFallback>
                                         </Avatar>
-                                        <div className="flex-1 space-y-1">
+                                        <div className="flex-1 min-w-0 space-y-1">
                                             <div className="flex items-center gap-2">
                                                 <span className="text-sm font-medium">{comment.author.name}</span>
                                                 <span className="text-xs text-muted-foreground">
                                                     {format(new Date(comment.createdAt), 'MMM d, yyyy h:mm a')}
                                                 </span>
                                                 {isOwnComment && !isEditingThisComment && (
-                                                    <div className="ml-auto flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <div className="ml-auto flex shrink-0 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                         <button
                                                             type="button"
                                                             className="rounded p-0.5 text-muted-foreground hover:bg-muted-foreground/20 hover:text-foreground"
@@ -2072,7 +2220,7 @@ export function IssueDetailContent({
                                                         <button
                                                             type="button"
                                                             className="rounded p-0.5 text-muted-foreground hover:bg-destructive/20 hover:text-destructive"
-                                                            onClick={() => setDeletingCommentId(comment.id)}
+                                                            onClick={() => handleDeleteComment(comment.id)}
                                                             aria-label="Delete comment"
                                                         >
                                                             <Trash2 className="h-3 w-3" />
@@ -2104,7 +2252,7 @@ export function IssueDetailContent({
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <p className="text-sm text-muted-foreground">{comment.content}</p>
+                                                <p className="text-sm text-muted-foreground break-words">{comment.content}</p>
                                             )}
                                         </div>
                                     </div>
@@ -2117,6 +2265,12 @@ export function IssueDetailContent({
                                 placeholder="Add a comment..."
                                 value={newComment}
                                 onChange={(e) => setNewComment(e.target.value)}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+                                        e.preventDefault();
+                                        handleAddComment();
+                                    }
+                                }}
                                 className="min-h-[80px]"
                             />
                             <Button className="h-auto" onClick={handleAddComment} disabled={!newComment.trim()}>
@@ -2164,6 +2318,7 @@ export function IssueDetailContent({
                                         setIsSaving(true);
                                         try {
                                             await onUpdate(editedIssue);
+                                            await commitPendingComments();
                                             toast.success('Issue updated successfully');
                                         } catch (err) {
                                             toast.error('Failed to update issue');
@@ -2171,7 +2326,7 @@ export function IssueDetailContent({
                                             setIsSaving(false);
                                         }
                                     }}
-                                    disabled={isSaving || isUploading}
+                                    disabled={isSaving || isUploading || !isIssueDirty}
                                     className="min-w-[120px]"
                                 >
                                     {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
@@ -2187,10 +2342,11 @@ export function IssueDetailContent({
                 file={previewingFile}
                 files={[
                     ...attachments.map(a => ({ url: resolveFileUrl(a.url) ?? a.url, fileName: a.filename, mimeType: a.fileType })),
+                    ...pendingFiles.map((f, i) => ({ url: pendingFileUrls[i], fileName: f.name, mimeType: f.type })),
                     ...videoLinks.map(v => ({ url: v.url, fileName: v.title || v.url })),
                 ]}
                 onClose={() => setPreviewingFile(null)}
             />
         </div >
     );
-}
+});

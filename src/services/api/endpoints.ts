@@ -38,7 +38,10 @@ export const ENDPOINTS = {
     REPORTS_OVERVIEW: (orgId: string) => `/organizations/${orgId}/reports/overview`,
     ALL_TASKS: (orgId: string) => `/organizations/${orgId}/tasks`,
     ALL_ISSUES: (orgId: string) => `/organizations/${orgId}/issues`,
+    ALL_MILESTONES: (orgId: string) => `/organizations/${orgId}/milestones`,
+    ALL_MODULES: (orgId: string) => `/organizations/${orgId}/hardware-modules`,
     ALL_MEETINGS: (orgId: string) => `/organizations/${orgId}/meetings`,
+    MEETING: (orgId: string, meetingId: string) => `/organizations/${orgId}/meetings/${meetingId}`,
     DASHBOARD: (orgId: string) => `/organizations/${orgId}/dashboard`,
     LOGO: (orgId: string) => `/organizations/${orgId}/logo`,
   },
@@ -84,6 +87,36 @@ export const ENDPOINTS = {
     /** Personal "My Tasks" item — no project. */
     CREATE_PERSONAL: '/tasks',
   },
+  // Task Import (file upload -> AI structuring -> chat resolve -> bulk create)
+  TASK_IMPORTS: {
+    START: (projectId: string) => `/projects/${projectId}/task-imports`,
+    STATUS: (projectId: string, jobId: string) => `/projects/${projectId}/task-imports/${jobId}`,
+    CONVERSATION: (projectId: string, jobId: string) => `/projects/${projectId}/task-imports/${jobId}/conversation`,
+    MESSAGES: (projectId: string, jobId: string) => `/projects/${projectId}/task-imports/${jobId}/messages`,
+    MESSAGE_ATTACHMENTS: (projectId: string, jobId: string) =>
+      `/projects/${projectId}/task-imports/${jobId}/messages/attachments`,
+    COMMIT: (projectId: string, jobId: string) => `/projects/${projectId}/task-imports/${jobId}/commit`,
+  },
+  // Issue Import (file upload -> AI structuring -> chat resolve -> bulk create)
+  ISSUE_IMPORTS: {
+    START: (projectId: string) => `/projects/${projectId}/issue-imports`,
+    STATUS: (projectId: string, jobId: string) => `/projects/${projectId}/issue-imports/${jobId}`,
+    CONVERSATION: (projectId: string, jobId: string) => `/projects/${projectId}/issue-imports/${jobId}/conversation`,
+    MESSAGES: (projectId: string, jobId: string) => `/projects/${projectId}/issue-imports/${jobId}/messages`,
+    MESSAGE_ATTACHMENTS: (projectId: string, jobId: string) =>
+      `/projects/${projectId}/issue-imports/${jobId}/messages/attachments`,
+    COMMIT: (projectId: string, jobId: string) => `/projects/${projectId}/issue-imports/${jobId}/commit`,
+  },
+  // BOM Import (file upload -> AI structuring -> chat resolve -> bulk create)
+  BOM_IMPORTS: {
+    START: (projectId: string) => `/projects/${projectId}/bom-imports`,
+    STATUS: (projectId: string, jobId: string) => `/projects/${projectId}/bom-imports/${jobId}`,
+    CONVERSATION: (projectId: string, jobId: string) => `/projects/${projectId}/bom-imports/${jobId}/conversation`,
+    MESSAGES: (projectId: string, jobId: string) => `/projects/${projectId}/bom-imports/${jobId}/messages`,
+    MESSAGE_ATTACHMENTS: (projectId: string, jobId: string) =>
+      `/projects/${projectId}/bom-imports/${jobId}/messages/attachments`,
+    COMMIT: (projectId: string, jobId: string) => `/projects/${projectId}/bom-imports/${jobId}/commit`,
+  },
   // Hardware Modules
   MODULES: {
     LIST: (projectId: string) => `/projects/${projectId}/hardware-modules`,
@@ -124,6 +157,7 @@ export const ENDPOINTS = {
   ISSUES: {
     LIST: (projectId: string) => `/projects/${projectId}/issues`,
     LIST_ALL: (projectId: string) => `/projects/${projectId}/issues/all`,
+    MY_ALL: '/issues/me/all',
     CREATE: (projectId: string) => `/projects/${projectId}/issues`,
     BY_ID: (id: string) => `/issues/${id}`,
     STATUS: (id: string) => `/issues/${id}/status`,
@@ -181,6 +215,13 @@ export const ENDPOINTS = {
     CLEAR_READ: '/notifications/read',
     PREFERENCES: '/notification-preferences',
   },
+  // Web push subscriptions
+  PUSH: {
+    SUBSCRIBE: '/push-subscriptions',
+    UNSUBSCRIBE: '/push-subscriptions',
+  },
+  // Per-user opt-in feature toggles (Integrations page "Features" cards)
+  FEATURE_TOGGLES: '/feature-toggles',
   // Comments
   COMMENTS: {
     UPDATE: (id: string) => `/comments/${id}`,
@@ -226,6 +267,7 @@ export const ENDPOINTS = {
   // Engineering Changes (ECO)
   ECOS: {
     LIST:     (projectId: string) => `/projects/${projectId}/ecos`,
+    BY_PART:  (projectId: string, partId: string) => `/projects/${projectId}/ecos/by-part/${partId}`,
     STATS:    (projectId: string) => `/projects/${projectId}/ecos/stats`,
     CREATE:   (projectId: string) => `/projects/${projectId}/ecos`,
     BY_ID:    (projectId: string, ecoId: string) => `/projects/${projectId}/ecos/${ecoId}`,
@@ -260,6 +302,23 @@ export const ENDPOINTS = {
     DISCONNECT: (orgId: string) => `/organizations/${orgId}/integrations/google-drive/disconnect`,
     STATUS: (orgId: string) => `/organizations/${orgId}/integrations/google-drive/status`,
   },
+  // Google Sheets integration (BOM sync, see GOOGLE_SHEETS_BOM_INTEGRATION.md).
+  // Connects once per org — exactly like Drive above — from Integrations;
+  // each project then just links a spreadsheet, reusing that org's connection.
+  GOOGLE_SHEETS: {
+    CONNECT: (orgId: string) => `/organizations/${orgId}/integrations/google-sheets/connect`,
+    DISCONNECT: (orgId: string) => `/organizations/${orgId}/integrations/google-sheets/disconnect`,
+    ORG_STATUS: (orgId: string) => `/organizations/${orgId}/integrations/google-sheets/status`,
+    LINK_STATUS: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/link-status`,
+    TABS: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/tabs`,
+    LINK: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/link`,
+    UNLINK: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/unlink`,
+    COLUMN_MAPPING: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/column-mapping`,
+    EXPORT_PREVIEW: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/export-preview`,
+    EXPORT_COMMIT: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/export-commit`,
+    IMPORT_PREVIEW: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/import-preview`,
+    IMPORT_COMMIT: (projectId: string) => `/projects/${projectId}/integrations/google-sheets/import-commit`,
+  },
   // AI Assistant (Ask — read-only, Phase 1). Deliberately separate from the
   // /conversations/* namespace above, which is the team-chat feature.
   AI_CONVERSATIONS: {
@@ -274,6 +333,39 @@ export const ENDPOINTS = {
     UPLOAD_ATTACHMENT: '/ai/conversations/attachments',
     SHARE: (id: string) => `/ai/conversations/${id}/share`,
     SHARED: (shareId: string) => `/ai/conversations/shared/${shareId}`,
+  },
+  // Inventory
+  INVENTORY: {
+    STOCK:        (orgId: string) => `/organizations/${orgId}/inventory/stock`,
+    ORDERS:       (orgId: string) => `/organizations/${orgId}/inventory/orders`,
+    TRANSACTIONS: (orgId: string) => `/organizations/${orgId}/inventory/transactions`,
+    BUILDS:       (orgId: string) => `/organizations/${orgId}/inventory/builds`,
+    BUILD_BOM_LINES: (orgId: string, buildId: string) => `/organizations/${orgId}/inventory/builds/${buildId}/bom-lines`,
+    BUILDS_CREATE:      (projectId: string) => `/projects/${projectId}/inventory/builds`,
+    RECEIVE:            (orgId: string) => `/organizations/${orgId}/inventory/stock/receive`,
+    ADJUST:             (orgId: string) => `/organizations/${orgId}/inventory/stock/adjust`,
+    ISSUE:              (orgId: string) => `/organizations/${orgId}/inventory/stock/issue`,
+    TRANSFER:           (orgId: string) => `/organizations/${orgId}/inventory/stock/transfer`,
+    ALLOCATE_STOCK:     (orgId: string, stockId: string) => `/organizations/${orgId}/inventory/stock/${stockId}/allocate`,
+    RELEASE_QUARANTINE: (orgId: string, stockId: string) => `/organizations/${orgId}/inventory/stock/${stockId}/release-quarantine`,
+    PLACE_ORDER:        (orgId: string) => `/organizations/${orgId}/inventory/orders`,
+    MARK_ORDER_ORDERED: (orgId: string, orderId: string) => `/organizations/${orgId}/inventory/orders/${orderId}/mark-ordered`,
+    ALLOCATE_BUILD:     (orgId: string, buildId: string) => `/organizations/${orgId}/inventory/builds/${buildId}/allocate`,
+    KIT_BUILD:          (orgId: string, buildId: string) => `/organizations/${orgId}/inventory/builds/${buildId}/kit`,
+    GENERATE_SHORTAGE_ORDERS: (orgId: string, buildId: string) => `/organizations/${orgId}/inventory/builds/${buildId}/generate-shortage-orders`,
+  },
+  // Locations (org-wide registry of stock locations — backs the inventory Location picker)
+  LOCATIONS: {
+    LIST:   (orgId: string) => `/organizations/${orgId}/locations`,
+    CREATE: (orgId: string) => `/organizations/${orgId}/locations`,
+  },
+  // Act (phase 2) proposals
+  AI_PROPOSALS: {
+    CONFIRM: (proposalId: string) => `/ai/proposals/${proposalId}/confirm`,
+    REVISE: (proposalId: string) => `/ai/proposals/${proposalId}/revise`,
+    REJECT: (proposalId: string) => `/ai/proposals/${proposalId}/reject`,
+    BY_ID: (proposalId: string) => `/ai/proposals/${proposalId}`,
+    BY_CONVERSATION: (conversationId: string) => `/ai/conversations/${conversationId}/proposals`,
   },
   // Uploads
   UPLOADS: {

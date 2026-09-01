@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -55,12 +56,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
 import { profileService } from '@/services/profile.service';
 import { notificationPreferencesService, NotificationPreferences } from '@/services/notificationPreferences.service';
+import { subscribeToPush, unsubscribeFromPush, getPermissionState } from '@/services/pushNotifications.service';
 import { organizationsService, OrganizationSettings } from '@/services/organizations.service';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { useAppTheme } from '@/hooks/useAppTheme';
 import { useUserStore } from '@/stores/useUserStore';
 import { getPasswordRequirements } from '@/lib/passwordValidation';
 import { resolveFileUrl } from '@/utils/fileUrl';
+import { cn } from '@/lib/utils';
 import { logger } from '@/services/monitoring/logger';
 import { SUPPORTED_CURRENCIES } from '@/hooks/useCurrency';
 import { useOrgPermissions } from '@/hooks/useProjectPermissions';
@@ -129,6 +132,9 @@ const Settings = () => {
   useEffect(() => {
     let cancelled = false;
     setNotificationPrefsLoading(true);
+    // Push reconciliation (dead-subscription cleanup / silent re-subscribe)
+    // runs once app-wide in PushReconciliationProvider — by the time this
+    // page mounts it's already settled, so just fetch current state to display.
     notificationPreferencesService
       .getPreferences()
       .then((prefs) => {
@@ -157,6 +163,40 @@ const Settings = () => {
     }
   };
 
+  // Browser push — separate from the generic Save button since toggling it
+  // has an immediate side effect (permission prompt / subscribe-unsubscribe),
+  // not something to defer until the user clicks Save.
+  const [pushToggleLoading, setPushToggleLoading] = useState(false);
+  const pushPermission = getPermissionState();
+  const pushBlocked = pushPermission === 'denied' || pushPermission === 'unsupported';
+
+  const handleTogglePush = async (checked: boolean) => {
+    setPushToggleLoading(true);
+    try {
+      if (checked) {
+        const subscribed = await subscribeToPush();
+        if (!subscribed) {
+          toast.error(
+            getPermissionState() === 'denied'
+              ? 'Notifications are blocked for this site — enable them in your browser settings first'
+              : 'Could not enable browser push notifications',
+          );
+          return;
+        }
+      } else {
+        await unsubscribeFromPush();
+      }
+
+      const saved = await notificationPreferencesService.updatePreferences({ pushEnabled: checked });
+      setNotificationPrefs(saved);
+      toast.success(checked ? 'Browser push notifications enabled' : 'Browser push notifications disabled');
+    } catch (error) {
+      logger.error('Error toggling push notifications:', error);
+      toast.error('Failed to update browser push notifications');
+    } finally {
+      setPushToggleLoading(false);
+    }
+  };
 
   // Profile form state
   const [profileForm, setProfileForm] = useState({
@@ -178,6 +218,10 @@ const Settings = () => {
     logoUrl: '',
   });
   const [localAvatarPreview, setLocalAvatarPreview] = useState<string | null>(null);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState<File | null>(null);
+  const [pendingAvatarRemoval, setPendingAvatarRemoval] = useState(false);
+  const [isAvatarPreviewOpen, setIsAvatarPreviewOpen] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [orgLoading, setOrgLoading] = useState(false);
   const [logoLoading, setLogoLoading] = useState(false);
   const [isEditingOrg, setIsEditingOrg] = useState(false);
@@ -224,9 +268,39 @@ const Settings = () => {
     }
   }, [profile]);
 
+  // Discard any unsaved avatar preview when leaving the page
+  const localAvatarPreviewRef = useRef<string | null>(null);
+  localAvatarPreviewRef.current = localAvatarPreview;
+  useEffect(() => {
+    return () => {
+      if (localAvatarPreviewRef.current) {
+        URL.revokeObjectURL(localAvatarPreviewRef.current);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     setActiveTab(getTabFromParams());
   }, [searchParams]);
+
+  // Discard any unsaved avatar/name edits when leaving the Profile tab
+  useEffect(() => {
+    if (activeTab !== 'profile') {
+      if (localAvatarPreviewRef.current) {
+        URL.revokeObjectURL(localAvatarPreviewRef.current);
+      }
+      setPendingAvatarFile(null);
+      setPendingAvatarRemoval(false);
+      setLocalAvatarPreview(null);
+      setIsEditingProfile(false);
+      if (profile) {
+        setProfileForm({
+          name: profile.name || '',
+          initials: profile.initials || '',
+        });
+      }
+    }
+  }, [activeTab, profile]);
 
   // Sync organization data to form - preserve local logoUrl if server hasn't updated yet
   const resetOrgFormFromOrganization = () => {
@@ -377,14 +451,36 @@ const Settings = () => {
     setIsEditingOrg(false);
   };
 
+  const hasProfileChanges =
+    profileForm.name !== (profile?.name || '') ||
+    profileForm.initials !== (profile?.initials || '') ||
+    pendingAvatarFile !== null ||
+    pendingAvatarRemoval;
+
   const handleSaveProfile = async () => {
+    if (!hasProfileChanges) {
+      return;
+    }
+
     setProfileLoading(true);
     try {
+      if (pendingAvatarFile) {
+        await profileService.uploadAvatar(pendingAvatarFile);
+      } else if (pendingAvatarRemoval) {
+        await profileService.deleteAvatar();
+      }
       await profileService.updateProfile({
         name: profileForm.name,
         initials: profileForm.initials,
       });
       await refreshProfile();
+      if (localAvatarPreview) {
+        URL.revokeObjectURL(localAvatarPreview);
+      }
+      setPendingAvatarFile(null);
+      setPendingAvatarRemoval(false);
+      setLocalAvatarPreview(null);
+      setIsEditingProfile(false);
       toast.success('Profile updated successfully');
     } catch (error) {
       logger.error('Error saving profile:', error);
@@ -398,21 +494,18 @@ const Settings = () => {
     fileInputRef.current?.click();
   };
 
-  const handleRemoveAvatar = async () => {
-    setAvatarLoading(true);
-    try {
-      await profileService.deleteAvatar();
-      await refreshProfile();
-      toast.success('Avatar removed successfully');
-    } catch (error) {
-      logger.error('Error removing avatar:', error);
-      toast.error('Failed to remove avatar');
-    } finally {
-      setAvatarLoading(false);
+  const handleRemoveAvatar = () => {
+    if (localAvatarPreview) {
+      URL.revokeObjectURL(localAvatarPreview);
     }
+
+    setPendingAvatarFile(null);
+    setLocalAvatarPreview(null);
+    setPendingAvatarRemoval(true);
+    setIsEditingProfile(true);
   };
 
-  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       if (file.size > 5 * 1024 * 1024) {
@@ -420,26 +513,17 @@ const Settings = () => {
         return;
       }
 
-      // Show local preview immediately
+      // Only preview locally — actual upload happens when Save Profile is clicked
+      if (localAvatarPreview) {
+        URL.revokeObjectURL(localAvatarPreview);
+      }
       const localPreview = URL.createObjectURL(file);
       setLocalAvatarPreview(localPreview);
-
-      setAvatarLoading(true);
-      try {
-        await profileService.uploadAvatar(file);
-        await refreshProfile();
-        URL.revokeObjectURL(localPreview);
-        setLocalAvatarPreview(null);
-        toast.success('Avatar updated successfully');
-      } catch (error) {
-        URL.revokeObjectURL(localPreview);
-        setLocalAvatarPreview(null);
-        logger.error('Error uploading avatar:', error);
-        toast.error('Failed to upload avatar');
-      } finally {
-        setAvatarLoading(false);
-      }
+      setPendingAvatarFile(file);
+      setPendingAvatarRemoval(false);
+      setIsEditingProfile(true);
     }
+    e.target.value = '';
   };
 
   const handleUpdatePassword = async () => {
@@ -823,14 +907,24 @@ const Settings = () => {
                 </CardHeader>
                 <CardContent className="space-y-6">
                   <div className="flex flex-col sm:flex-row items-center sm:items-center gap-4 sm:gap-6">
-                    <Avatar className="h-20 w-20 shrink-0">
-                      {avatarLoading && !localAvatarPreview ? (
+                    <Avatar
+                      className={cn(
+                        'h-20 w-20 shrink-0',
+                        (localAvatarPreview || profile?.avatarUrl) && 'cursor-pointer'
+                      )}
+                      onClick={() => {
+                        if (localAvatarPreview || (!pendingAvatarRemoval && profile?.avatarUrl)) {
+                          setIsAvatarPreviewOpen(true);
+                        }
+                      }}
+                    >
+                      {avatarLoading && !localAvatarPreview && !pendingAvatarRemoval ? (
                         <AvatarFallback className="bg-primary/10">
                           <Loader2 className="h-6 w-6 animate-spin" />
                         </AvatarFallback>
-                      ) : localAvatarPreview || profile?.avatarUrl ? (
+                      ) : localAvatarPreview || (!pendingAvatarRemoval && profile?.avatarUrl) ? (
                         <AvatarImage
-                          src={localAvatarPreview || resolveFileUrl(profile?.avatarUrl) || ''}
+                          src={localAvatarPreview || (!pendingAvatarRemoval ? resolveFileUrl(profile?.avatarUrl) || '' : '')}
                           alt={profile?.name || 'Avatar'}
                         />
                       ) : (
@@ -852,7 +946,7 @@ const Settings = () => {
                           <Upload className="h-4 w-4 mr-2" />
                           Change Avatar
                         </Button>
-                        {profile?.avatarUrl && (
+                        {(profile?.avatarUrl || localAvatarPreview || pendingAvatarRemoval) && (
                           <Button variant="outline" size="sm" onClick={handleRemoveAvatar} disabled={avatarLoading}>
                             <Trash2 className="h-4 w-4 mr-2" />
                             Remove
@@ -860,28 +954,69 @@ const Settings = () => {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        JPG, PNG or GIF. Max 5MB.
+                        {pendingAvatarFile
+                          ? 'Click Save Profile to apply your new picture.'
+                          : pendingAvatarRemoval
+                            ? 'Click Save Profile to remove your current picture.'
+                            : 'JPG, PNG or GIF. Max 5MB.'}
                       </p>
                     </div>
                   </div>
+
+                  <Dialog open={isAvatarPreviewOpen} onOpenChange={setIsAvatarPreviewOpen}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle>Profile Picture</DialogTitle>
+                      </DialogHeader>
+                      <div className="flex items-center justify-center py-2">
+                        <img
+                          src={localAvatarPreview || (!pendingAvatarRemoval ? resolveFileUrl(profile?.avatarUrl) || '' : '')}
+                          alt={profile?.name || 'Avatar'}
+                          className="max-h-[60vh] w-full rounded-md object-contain"
+                        />
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                   <Separator />
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="full-name">Full Name</Label>
-                      <Input
-                        id="full-name"
-                        value={profileForm.name}
-                        onChange={(e) => {
-                          const name = e.target.value;
-                          const initials = name
-                            .split(' ')
-                            .map(n => n[0])
-                            .join('')
-                            .toUpperCase()
-                            .slice(0, 2);
-                          setProfileForm({ ...profileForm, name, initials });
-                        }}
-                      />
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="full-name">Full Name</Label>
+                        {!isEditingProfile && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setIsEditingProfile(true)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      {isEditingProfile ? (
+                        <Input
+                          id="full-name"
+                          value={profileForm.name}
+                          autoFocus
+                          onChange={(e) => {
+                            const name = e.target.value;
+                            const initials = name
+                              .split(' ')
+                              .map(n => n[0])
+                              .join('')
+                              .toUpperCase()
+                              .slice(0, 2);
+                            setProfileForm({ ...profileForm, name, initials });
+                          }}
+                        />
+                      ) : (
+                        <p
+                          id="full-name"
+                          className="min-h-10 w-full break-words rounded-md border border-input bg-muted px-3 py-2 text-sm"
+                        >
+                          {profileForm.name || '—'}
+                        </p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
@@ -893,7 +1028,7 @@ const Settings = () => {
                       />
                     </div>
                   </div>
-                  <Button onClick={handleSaveProfile} disabled={profileLoading}>
+                  <Button onClick={handleSaveProfile} disabled={profileLoading || !hasProfileChanges}>
                     {profileLoading ? (
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                     ) : (
@@ -998,6 +1133,27 @@ const Settings = () => {
                         }
                       />
                     </div>
+                  </div>
+                </div>
+                <Separator />
+                <div className="space-y-4">
+                  <h4 className="text-sm font-medium">Browser Notifications</h4>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <Label>Push Notifications</Label>
+                      <p className="text-sm text-muted-foreground">
+                        {pushPermission === 'unsupported'
+                          ? 'Not supported in this browser'
+                          : pushPermission === 'denied'
+                            ? 'Blocked — enable notifications for this site in your browser settings'
+                            : 'Get notified even when this tab is closed'}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={notificationPrefs.pushEnabled}
+                      disabled={notificationPrefsLoading || pushToggleLoading || pushBlocked}
+                      onCheckedChange={handleTogglePush}
+                    />
                   </div>
                 </div>
                 <Separator />

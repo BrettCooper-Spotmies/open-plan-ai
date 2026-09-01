@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { OnlineStatus } from './OnlineStatus';
 import { HighlightedText } from './HighlightedText';
@@ -8,9 +9,12 @@ interface PeopleListProps {
     onSelect: (userId: string) => void;
     onlineUserIds?: Set<string>;
     searchQuery?: string;
+    // True while these are search results for people with no started chat yet —
+    // dims the row so already-chatted matches (shown above) read as primary.
+    dimmed?: boolean;
 }
 
-export function PeopleList({ users, onSelect, onlineUserIds, searchQuery }: PeopleListProps) {
+export function PeopleList({ users, onSelect, onlineUserIds, searchQuery, dimmed }: PeopleListProps) {
     if (users.length === 0) return null;
 
     return (
@@ -23,18 +27,21 @@ export function PeopleList({ users, onSelect, onlineUserIds, searchQuery }: Peop
                     <button
                         key={user.id}
                         onClick={() => onSelect(user.id)}
-                        className="flex items-center gap-3 w-full px-3 py-2 text-left rounded-md hover:bg-accent/50 transition-colors"
+                        className={cn(
+                            'flex items-center gap-2.5 w-full px-3 py-1.5 text-left rounded-md hover:bg-accent/50 transition-opacity',
+                            dimmed && 'opacity-55 hover:opacity-100'
+                        )}
                     >
                         <div className="relative shrink-0">
-                            <Avatar className="h-8 w-8">
+                            <Avatar className="h-5 w-5">
                                 <AvatarImage src={user.avatarUrl} alt={user.name} />
-                                <AvatarFallback className="text-xs">
+                                <AvatarFallback className="text-[8px]">
                                     {user.initials}
                                 </AvatarFallback>
                             </Avatar>
                             <OnlineStatus
                                 isOnline={onlineUserIds?.has(user.id) ?? false}
-                                className="absolute -bottom-0.5 -right-0.5"
+                                className="absolute -bottom-px -right-px h-1.5 w-1.5 border"
                             />
                         </div>
                         <div className="flex-1 min-w-0">

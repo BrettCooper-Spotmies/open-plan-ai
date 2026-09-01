@@ -13,6 +13,8 @@ import { AppLayoutOutlet } from "@/components/layout/AppLayoutOutlet";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { useUserStore } from "@/stores/useUserStore";
 import { ChatNotificationsProvider } from "@/features/chat/providers/ChatNotificationsProvider";
+import { PushReconciliationProvider } from "@/features/notifications/providers/PushReconciliationProvider";
+import { FeatureTogglesHydrationProvider } from "@/features/integrations/FeatureTogglesHydrationProvider";
 import { AssistantWidget } from "@/features/assistant/components/AssistantWidget";
 import { initializeGA, setUserId } from "@/services/analytics";
 import { usePageTracking } from "@/hooks/usePageTracking";
@@ -32,6 +34,7 @@ import {
 
 // 404 — eagerly loaded (tiny, always needed)
 import NotFound from "./pages/NotFound";
+// import DebugDialogs from "./DebugDialogs";
 
 // ── Feature routes — lazy loaded for code splitting ───────────────────────────
 const Dashboard     = lazy(() => import("./features/dashboard"));
@@ -43,6 +46,7 @@ const ProjectDetail = lazy(() => import("./features/projects/ProjectDetail"));
 const IssuePage     = lazy(() => import("./features/projects/IssuePage"));
 const NewProject    = lazy(() => import("./features/projects/NewProject"));
 const EditProject   = lazy(() => import("./features/projects/EditProject"));
+const ProjectDetailsPage = lazy(() => import("./features/projects/ProjectDetailsPage"));
 const Team          = lazy(() => import("./features/team"));
 const Settings      = lazy(() => import("./features/settings"));
 const EditOrganizationSettings = lazy(() => import("./features/settings/EditOrganizationSettings"));
@@ -89,6 +93,8 @@ function AppShell() {
   return (
     <>
       <ChatNotificationsProvider />
+      <PushReconciliationProvider />
+      <FeatureTogglesHydrationProvider />
       <AssistantWidget />
       <Routes>
         {/* ── Public (auth) routes ─────────────────────────────── */}
@@ -100,6 +106,7 @@ function AppShell() {
         <Route path="/reset-password"  element={<ResetPasswordPage />} />
         <Route path="/verify-email"    element={<VerifyEmailPage />} />
         <Route path="/join-org"        element={<JoinOrganizationPage />} />
+        {/* <Route path="/debug-dialogs"   element={<DebugDialogs />} /> */}
         <Route
           path="/share/:shareId"
           element={
@@ -197,6 +204,14 @@ function AppShell() {
               }
             />
             <Route
+              path="/projects/:id/details"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
+                  <ProjectDetailsPage />
+                </Suspense>
+              }
+            />
+            <Route
               path="/projects/:id/edit"
               element={
                 <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
@@ -217,14 +232,6 @@ function AppShell() {
               element={
                 <Suspense fallback={<AppLayoutSkeleton variant="detail" />}>
                   <IssuePage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="/team"
-              element={
-                <Suspense fallback={<AppLayoutSkeleton variant="team" />}>
-                  <Team />
                 </Suspense>
               }
             />
@@ -268,6 +275,10 @@ function AppShell() {
                 </Suspense>
               }
             />
+          </Route>
+
+          {/* ── Routes without content padding ───────────────── */}
+          <Route element={<AppLayoutOutlet noPadding />}>
             <Route
               path="/inventory"
               element={
@@ -276,10 +287,14 @@ function AppShell() {
                 </Suspense>
               }
             />
-          </Route>
-
-          {/* ── Routes without content padding ───────────────── */}
-          <Route element={<AppLayoutOutlet noPadding />}>
+            <Route
+              path="/team"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="team" />}>
+                  <Team />
+                </Suspense>
+              }
+            />
             <Route
               path="/assistant"
               element={

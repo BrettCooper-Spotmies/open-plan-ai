@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { format } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Issue, IssueStatus, IssueSeverity, IssueCategory, Task, TeamMember } from '@/types';
 import { Card } from '@/components/ui/card';
@@ -10,11 +11,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ColorSwatchPicker } from '@/components/shared/ColorSwatchPicker';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
+import { cn, getDisplayId } from '@/lib/utils';
 import { playCompleteSound } from '@/lib/playSound';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import {
@@ -32,6 +33,7 @@ import {
   MoreHorizontal,
   Trash2,
   Calendar,
+  Loader2,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -63,6 +65,7 @@ import { AttachmentBadges } from '@/components/shared/AttachmentBadges';
 
 interface IssuesViewProps {
   issues: Issue[];
+  projectCode?: string;
   viewMode?: 'table' | 'kanban';
   tasks?: Task[];
   teamMembers?: TeamMember[];
@@ -73,9 +76,14 @@ interface IssuesViewProps {
   assignedByFilter?: string[];
   updatedByFilter?: string[];
   dueDateFilter?: 'overdue' | 'today' | 'this-week' | 'this-month' | 'no-date';
-  dueDateCustomFilter?: string;
+  dueDateCustomFilter?: string; // start of a custom range (yyyy-MM-dd), inclusive
+  dueDateCustomToFilter?: string; // end of a custom range (yyyy-MM-dd), inclusive
   reportedDateFilter?: 'today' | 'this-week' | 'this-month';
-  reportedDateCustomFilter?: string;
+  reportedDateCustomFilter?: string; // start of a custom range (yyyy-MM-dd), inclusive
+  reportedDateCustomToFilter?: string; // end of a custom range (yyyy-MM-dd), inclusive
+  completedDateFilter?: 'today' | 'this-week' | 'this-month';
+  completedDateCustomFilter?: string; // start of a custom range (yyyy-MM-dd), inclusive
+  completedDateCustomToFilter?: string; // end of a custom range (yyyy-MM-dd), inclusive
   tagsFilter?: string[];
   isAddDialogOpen?: boolean;
   onAddDialogClose?: () => void;
@@ -83,6 +91,8 @@ interface IssuesViewProps {
   onIssueCreate?: (issue: Partial<Issue>, pendingFiles?: File[]) => void;
   onIssueDelete?: (issueId: string) => void;
   userProjectRole?: string;
+  /** Px offset from the top of the scroll container to stick the table header below — e.g. the height of a sticky page header rendered above this view. */
+  stickyOffset?: number;
 }
 
 interface IssuesKanbanColumn {
@@ -149,33 +159,60 @@ const issueSeverityBorder: Record<IssueSeverity, string> = {
 
 const BOARD_CHECKLIST_PREVIEW_COUNT = 2;
 
+// Stable identity for unset array filter props. A literal `[]` default in a
+// destructured prop is re-created on every render, which made the pagination
+// reset effect below (keyed on these arrays) fire on every render — including
+// the one right after clicking "Next" — snapping the page back to 1 before
+// the new rows ever showed.
+const EMPTY_ARRAY: never[] = [];
+
+/**
+ * Inclusive yyyy-MM-dd comparison for the "Custom..." date filters — `to`
+ * falls back to `from` so a single-day pick (from === to) still works via
+ * this same path. String comparison is safe here since both sides are
+ * always zero-padded ISO date strings, which sort identically to a real
+ * date comparison.
+ */
+function matchesCustomDateRange(date: Date | null, from: string | undefined, to: string | undefined): boolean {
+  if (!date || !from) return false;
+  const day = format(date, 'yyyy-MM-dd');
+  return day >= from && day <= (to || from);
+}
+
 export function IssuesView({
   issues,
+  projectCode,
   viewMode = 'table',
   tasks = [],
   teamMembers = [],
   searchQuery: externalSearchQuery,
-  severityFilter: externalSeverityFilter = [],
-  statusFilter: externalStatusFilter = [],
-  assigneeFilter: externalAssigneeFilter = [],
-  assignedByFilter: externalAssignedByFilter = [],
-  updatedByFilter: externalUpdatedByFilter = [],
+  severityFilter: externalSeverityFilter = EMPTY_ARRAY,
+  statusFilter: externalStatusFilter = EMPTY_ARRAY,
+  assigneeFilter: externalAssigneeFilter = EMPTY_ARRAY,
+  assignedByFilter: externalAssignedByFilter = EMPTY_ARRAY,
+  updatedByFilter: externalUpdatedByFilter = EMPTY_ARRAY,
   dueDateFilter: externalDueDateFilter,
   dueDateCustomFilter: externalDueDateCustomFilter,
+  dueDateCustomToFilter: externalDueDateCustomToFilter,
   reportedDateFilter: externalReportedDateFilter,
   reportedDateCustomFilter: externalReportedDateCustomFilter,
-  tagsFilter: externalTagsFilter = [],
+  reportedDateCustomToFilter: externalReportedDateCustomToFilter,
+  completedDateFilter: externalCompletedDateFilter,
+  completedDateCustomFilter: externalCompletedDateCustomFilter,
+  completedDateCustomToFilter: externalCompletedDateCustomToFilter,
+  tagsFilter: externalTagsFilter = EMPTY_ARRAY,
   isAddDialogOpen: externalIsAddDialogOpen,
   onAddDialogClose,
   onIssueUpdate,
   onIssueCreate,
   onIssueDelete,
   userProjectRole,
+  stickyOffset = 0,
 }: IssuesViewProps) {
   const { id: routeProjectId } = useParams();
   const { user } = useAuth();
   const isMobile = useIsMobile();
-  const { data: apiIssueColumns } = useIssueColumns(routeProjectId);
+  const { data: apiIssueColumns, isLoading: isIssueColumnsLoading } = useIssueColumns(routeProjectId);
   const createIssueColumn = useCreateIssueColumn(routeProjectId);
   const updateIssueColumn = useUpdateIssueColumn(routeProjectId);
   const deleteIssueColumn = useDeleteIssueColumn(routeProjectId);
@@ -187,7 +224,7 @@ export function IssuesView({
   const [internalStatusFilter, setInternalStatusFilter] = useState<string[]>([]);
   const [localIssues, setLocalIssues] = useState<Issue[]>(issues);
   const [columns, setColumns] = useState<IssuesKanbanColumn[]>(() =>
-    apiColumnsToKanban(DEFAULT_ISSUE_COLUMNS),
+    apiColumnsToKanban(apiIssueColumns && apiIssueColumns.length > 0 ? apiIssueColumns : DEFAULT_ISSUE_COLUMNS),
   );
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -201,6 +238,7 @@ export function IssuesView({
   const [expandedChecklistPreview, setExpandedChecklistPreview] = useState<Record<string, boolean>>({});
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [selectedMobileStatus, setSelectedMobileStatus] = useState<string>('all');
 
   // Sync columns from API
   useEffect(() => {
@@ -218,8 +256,13 @@ export function IssuesView({
   const updatedByFilter = externalUpdatedByFilter;
   const dueDateFilter = externalDueDateFilter;
   const dueDateCustomFilter = externalDueDateCustomFilter;
+  const dueDateCustomToFilter = externalDueDateCustomToFilter;
   const reportedDateFilter = externalReportedDateFilter;
   const reportedDateCustomFilter = externalReportedDateCustomFilter;
+  const reportedDateCustomToFilter = externalReportedDateCustomToFilter;
+  const completedDateFilter = externalCompletedDateFilter;
+  const completedDateCustomFilter = externalCompletedDateCustomFilter;
+  const completedDateCustomToFilter = externalCompletedDateCustomToFilter;
   const tagsFilter = externalTagsFilter;
 
   useEffect(() => {
@@ -282,7 +325,7 @@ export function IssuesView({
     let matchesDueDate = true;
     if (dueDateCustomFilter) {
       const issueDueDate = issue.dueDate ? new Date(issue.dueDate) : null;
-      matchesDueDate = !!issueDueDate && issueDueDate.toDateString() === new Date(dueDateCustomFilter).toDateString();
+      matchesDueDate = matchesCustomDateRange(issueDueDate, dueDateCustomFilter, dueDateCustomToFilter);
     } else if (dueDateFilter) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -315,7 +358,7 @@ export function IssuesView({
     let matchesReportedDate = true;
     if (reportedDateCustomFilter) {
       const issueReportedDate = issue.reportedAt ? new Date(issue.reportedAt) : null;
-      matchesReportedDate = !!issueReportedDate && issueReportedDate.toDateString() === new Date(reportedDateCustomFilter).toDateString();
+      matchesReportedDate = matchesCustomDateRange(issueReportedDate, reportedDateCustomFilter, reportedDateCustomToFilter);
     } else if (reportedDateFilter) {
       const todayStart = new Date();
       todayStart.setHours(0, 0, 0, 0);
@@ -340,7 +383,35 @@ export function IssuesView({
       }
     }
 
-    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesAssignedBy && matchesUpdatedBy && matchesTags && matchesDueDate && matchesReportedDate;
+    let matchesCompletedDate = true;
+    if (completedDateCustomFilter) {
+      const issueCompletedDate = issue.resolvedAt ? new Date(issue.resolvedAt) : null;
+      matchesCompletedDate = matchesCustomDateRange(issueCompletedDate, completedDateCustomFilter, completedDateCustomToFilter);
+    } else if (completedDateFilter) {
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+      const issueCompletedDate = issue.resolvedAt ? new Date(issue.resolvedAt) : null;
+      switch (completedDateFilter) {
+        case 'today':
+          matchesCompletedDate = !!issueCompletedDate && issueCompletedDate.toDateString() === todayStart.toDateString();
+          break;
+        case 'this-week': {
+          const weekStart = new Date(todayStart);
+          weekStart.setDate(todayStart.getDate() - 7);
+          matchesCompletedDate = !!issueCompletedDate && issueCompletedDate >= weekStart && issueCompletedDate <= todayEnd;
+          break;
+        }
+        case 'this-month': {
+          const monthStart = new Date(todayStart.getFullYear(), todayStart.getMonth(), 1);
+          matchesCompletedDate = !!issueCompletedDate && issueCompletedDate >= monthStart && issueCompletedDate <= todayEnd;
+          break;
+        }
+      }
+    }
+
+    return matchesSearch && matchesSeverity && matchesStatus && matchesAssignee && matchesAssignedBy && matchesUpdatedBy && matchesTags && matchesDueDate && matchesReportedDate && matchesCompletedDate;
   });
 
   // Sort by severity (critical first), then by date
@@ -368,6 +439,8 @@ export function IssuesView({
     dueDateCustomFilter,
     reportedDateFilter,
     reportedDateCustomFilter,
+    completedDateFilter,
+    completedDateCustomFilter,
     pageSize,
   ]);
 
@@ -500,6 +573,53 @@ export function IssuesView({
   const visibleColumns = columns.filter(
     (column) => !(column.isSpecial && column.status === 'dependencies' && dependencyIssuesCount === 0),
   );
+
+  // Mobile list view groups issues into the project's buckets, mirroring MobileTaskListView.
+  const mobileStatusCounts = sortedIssues.reduce<Record<string, number>>((acc, issue) => {
+    acc[issue.status] = (acc[issue.status] || 0) + 1;
+    return acc;
+  }, {});
+
+  const MOBILE_OTHER_BUCKET = '__other__';
+  const issueMatchesMobileBucket = (issue: Issue, bucketKey: string) =>
+    bucketKey === MOBILE_OTHER_BUCKET
+      ? !columns.some((column) => column.status === issue.status)
+      : issue.status === bucketKey;
+
+  const ungroupedMobileCount = sortedIssues.filter(
+    (issue) => !columns.some((column) => column.status === issue.status),
+  ).length;
+
+  const mobileBuckets = [
+    ...columns
+      .filter((column) => column.status !== 'dependencies' && (mobileStatusCounts[column.status] || 0) > 0)
+      .map((column) => ({
+        key: column.status,
+        label: column.label,
+        color: column.color,
+        count: mobileStatusCounts[column.status] || 0,
+      })),
+    ...(ungroupedMobileCount > 0
+      ? [{ key: MOBILE_OTHER_BUCKET, label: 'Other', color: '#6b7280', count: ungroupedMobileCount }]
+      : []),
+  ];
+
+  // A bucket can disappear while it's selected (last issue moved out) — fall back to All.
+  const activeMobileStatus =
+    selectedMobileStatus !== 'all' && !mobileBuckets.some((bucket) => bucket.key === selectedMobileStatus)
+      ? 'all'
+      : selectedMobileStatus;
+
+  const mobileDisplayedIssues = activeMobileStatus === 'all'
+    ? sortedIssues
+    : sortedIssues.filter((issue) => issueMatchesMobileBucket(issue, activeMobileStatus));
+
+  const mobileGroupedSections = mobileBuckets
+    .map((bucket) => ({
+      ...bucket,
+      items: mobileDisplayedIssues.filter((issue) => issueMatchesMobileBucket(issue, bucket.key)),
+    }))
+    .filter((group) => group.items.length > 0);
 
   const handleDragEnd = (result: DropResult) => {
     const pointer = getLastPointerPosition();
@@ -650,7 +770,12 @@ export function IssuesView({
 
   return (
     <div className="space-y-4">
-      {viewMode === 'kanban' ? (
+      {viewMode === 'kanban' && isIssueColumnsLoading && !apiIssueColumns ? (
+        <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <p className="text-sm">Loading board…</p>
+        </div>
+      ) : viewMode === 'kanban' ? (
         <DragDropContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <Droppable droppableId="board" type="COLUMN" direction={isMobile ? 'vertical' : 'horizontal'}>
             {(provided) => (
@@ -697,127 +822,134 @@ export function IssuesView({
                               isDropDisabled={isDependenciesColumn}
                             >
                               {(issuesProvided, snapshot) => (
-                                  <div
-                                    ref={issuesProvided.innerRef}
-                                    {...issuesProvided.droppableProps}
-                                    data-kanban-column-id={column.id}
-                                    className={cn(
-                                      'space-y-2 min-h-[120px] h-full p-2 rounded-lg transition-colors',
-                                      snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30'
-                                    )}
-                                  >
-                                    {columnIssues.length === 0 ? (
-                                      <p className="text-xs text-muted-foreground p-1">
-                                        {isDependenciesColumn ? 'No dependency-linked issues' : 'No issues'}
-                                      </p>
-                                    ) : (
-                                      columnIssues.map((issue, issueIndex) => {
-                                        const SeverityIcon = ISSUE_SEVERITY_DISPLAY[issue.severity].icon;
-                                        const linkedCount = (issue.blocksTaskIds?.length || 0)
-                                          + (issue.blocksMilestoneIds?.length || 0)
-                                          + (issue.blockedBy?.length || 0);
+                                <div
+                                  ref={issuesProvided.innerRef}
+                                  {...issuesProvided.droppableProps}
+                                  data-kanban-column-id={column.id}
+                                  className={cn(
+                                    'space-y-2 min-h-[120px] p-2 rounded-lg transition-colors flex-1 overflow-y-auto',
+                                    snapshot.isDraggingOver ? 'bg-muted/50' : 'bg-muted/30'
+                                  )}
+                                >
+                                  {columnIssues.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground p-1">
+                                      {isDependenciesColumn ? 'No dependency-linked issues' : 'No issues'}
+                                    </p>
+                                  ) : (
+                                    columnIssues.map((issue, issueIndex) => {
+                                      const SeverityIcon = ISSUE_SEVERITY_DISPLAY[issue.severity].icon;
+                                      const linkedCount = (issue.blocksTaskIds?.length || 0)
+                                        + (issue.blocksMilestoneIds?.length || 0)
+                                        + (issue.blockedBy?.length || 0);
 
-                                        return (
-                                          <Draggable key={issue.id} draggableId={issue.id} index={issueIndex}>
-                                            {(issueProvided, issueSnapshot) => (
-                                              <Card
-                                                ref={issueProvided.innerRef}
-                                                {...issueProvided.draggableProps}
-                                                {...issueProvided.dragHandleProps}
-                                                className={cn(
-                                                  'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
-                                                  issueSeverityBorder[issue.severity],
-                                                  issueSnapshot.isDragging && 'shadow-lg rotate-2'
-                                                )}
-                                                onClick={() => handleIssueClick(issue)}
-                                              >
-                                                <div className="space-y-2">
-                                                  <div className="flex items-start justify-between gap-2">
-                                                    <div className="flex items-start gap-2 min-w-0 flex-1">
-                                                      <button
-                                                        onClick={(e) => {
-                                                          e.stopPropagation();
-                                                          handleStatusChange(issue, issue.status === 'resolved' ? 'open' : 'resolved');
-                                                        }}
-                                                        className={cn(
-                                                          'shrink-0 mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center transition-all',
-                                                          issue.status === 'resolved'
-                                                            ? 'bg-status-done/20 border-status-done'
-                                                            : 'border-foreground/30 hover:border-foreground hover:bg-muted bg-background'
-                                                        )}
-                                                        aria-label="Mark as resolved"
-                                                      >
-                                                        {issue.status === 'resolved' && <Check className="h-2.5 w-2.5 text-status-done" />}
-                                                      </button>
+                                      return (
+                                        <Draggable key={issue.id} draggableId={issue.id} index={issueIndex}>
+                                          {(issueProvided, issueSnapshot) => (
+                                            <Card
+                                              ref={issueProvided.innerRef}
+                                              {...issueProvided.draggableProps}
+                                              {...issueProvided.dragHandleProps}
+                                              className={cn(
+                                                'p-3 cursor-grab active:cursor-grabbing border-l-4 relative group hover:shadow-md transition-shadow',
+                                                issueSeverityBorder[issue.severity],
+                                                issueSnapshot.isDragging && 'shadow-lg rotate-2'
+                                              )}
+                                              onClick={() => handleIssueClick(issue)}
+                                            >
+                                              <div className="space-y-2">
+                                                <div className="flex items-start justify-between gap-2">
+                                                  <div className="flex items-start gap-2 min-w-0 flex-1">
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleStatusChange(issue, issue.status === 'resolved' ? 'open' : 'resolved');
+                                                      }}
+                                                      className={cn(
+                                                        'shrink-0 mt-0.5 h-4 w-4 rounded-full border flex items-center justify-center transition-all',
+                                                        issue.status === 'resolved'
+                                                          ? 'bg-status-done/20 border-status-done'
+                                                          : 'border-foreground/30 hover:border-foreground hover:bg-muted bg-background'
+                                                      )}
+                                                      aria-label="Mark as resolved"
+                                                    >
+                                                      {issue.status === 'resolved' && <Check className="h-2.5 w-2.5 text-status-done" />}
+                                                    </button>
+                                                    <div className="min-w-0">
+                                                      {getDisplayId(projectCode, 'I', issue.number) && (
+                                                        <span className="font-mono font-semibold text-[10px] text-blue-500 block">
+                                                          {getDisplayId(projectCode, 'I', issue.number)}
+                                                        </span>
+                                                      )}
                                                       <p className="text-sm font-medium line-clamp-2">{issue.title}</p>
                                                     </div>
-                                                    <div className="text-muted-foreground hover:text-foreground mt-0.5">
-                                                      <GripVertical className="h-4 w-4" />
-                                                    </div>
                                                   </div>
+                                                  <div className="text-muted-foreground hover:text-foreground mt-0.5">
+                                                    <GripVertical className="h-4 w-4" />
+                                                  </div>
+                                                </div>
 
-                                                  {issue.description && (
-                                                    <p className="text-xs text-muted-foreground line-clamp-2">{issue.description}</p>
-                                                  )}
+                                                {issue.description && (
+                                                  <p className="text-xs text-muted-foreground line-clamp-2">{issue.description}</p>
+                                                )}
 
-                                                  {(() => {
-                                                    const boardChecklistItems = (issue.checklist || []).filter(
-                                                      (item) => item.showInBoardView === true
-                                                    );
-                                                    if (boardChecklistItems.length === 0) return null;
-                                                    const isExpanded = expandedChecklistPreview[issue.id] === true;
-                                                    const visibleItems = isExpanded
-                                                      ? boardChecklistItems
-                                                      : boardChecklistItems.slice(0, BOARD_CHECKLIST_PREVIEW_COUNT);
-                                                    const hasMore = boardChecklistItems.length > BOARD_CHECKLIST_PREVIEW_COUNT;
-                                                    return (
-                                                      <div className="space-y-1.5 pt-1">
-                                                        {visibleItems.map((item) => (
-                                                          <div key={item.id} className="flex items-center gap-2">
-                                                            <Checkbox
-                                                              checked={item.completed}
-                                                              onCheckedChange={(checked) => {
-                                                                if (checked === 'indeterminate') return;
-                                                                handleToggleChecklistItemOnCard(issue.id, item.id);
-                                                              }}
-                                                              className="h-3.5 w-3.5 rounded-[3px]"
-                                                              onClick={(event) => event.stopPropagation()}
-                                                            />
-                                                            <button
-                                                              type="button"
-                                                              onClick={(event) => {
-                                                                event.stopPropagation();
-                                                                handleToggleChecklistItemOnCard(issue.id, item.id);
-                                                              }}
-                                                              className={cn(
-                                                                'min-w-0 flex-1 text-left text-[11px] text-muted-foreground truncate',
-                                                                item.completed && 'line-through'
-                                                              )}
-                                                            >
-                                                              {item.text}
-                                                            </button>
-                                                          </div>
-                                                        ))}
-                                                        {hasMore && (
+                                                {(() => {
+                                                  const boardChecklistItems = (issue.checklist || []).filter(
+                                                    (item) => item.showInBoardView === true
+                                                  );
+                                                  if (boardChecklistItems.length === 0) return null;
+                                                  const isExpanded = expandedChecklistPreview[issue.id] === true;
+                                                  const visibleItems = isExpanded
+                                                    ? boardChecklistItems
+                                                    : boardChecklistItems.slice(0, BOARD_CHECKLIST_PREVIEW_COUNT);
+                                                  const hasMore = boardChecklistItems.length > BOARD_CHECKLIST_PREVIEW_COUNT;
+                                                  return (
+                                                    <div className="space-y-1.5 pt-1">
+                                                      {visibleItems.map((item) => (
+                                                        <div key={item.id} className="flex items-center gap-2">
+                                                          <Checkbox
+                                                            checked={item.completed}
+                                                            onCheckedChange={(checked) => {
+                                                              if (checked === 'indeterminate') return;
+                                                              handleToggleChecklistItemOnCard(issue.id, item.id);
+                                                            }}
+                                                            className="h-3.5 w-3.5 rounded-[3px]"
+                                                            onClick={(event) => event.stopPropagation()}
+                                                          />
                                                           <button
                                                             type="button"
-                                                            className="text-[11px] text-primary hover:underline"
                                                             onClick={(event) => {
                                                               event.stopPropagation();
-                                                              setExpandedChecklistPreview((prev) => ({
-                                                                ...prev,
-                                                                [issue.id]: !isExpanded,
-                                                              }));
+                                                              handleToggleChecklistItemOnCard(issue.id, item.id);
                                                             }}
+                                                            className={cn(
+                                                              'min-w-0 flex-1 text-left text-[11px] text-muted-foreground truncate',
+                                                              item.completed && 'line-through'
+                                                            )}
                                                           >
-                                                            {isExpanded ? 'View less' : `View more (${boardChecklistItems.length - BOARD_CHECKLIST_PREVIEW_COUNT})`}
+                                                            {item.text}
                                                           </button>
-                                                        )}
-                                                      </div>
-                                                    );
-                                                  })()}
+                                                        </div>
+                                                      ))}
+                                                      {hasMore && (
+                                                        <button
+                                                          type="button"
+                                                          className="text-[11px] text-primary hover:underline"
+                                                          onClick={(event) => {
+                                                            event.stopPropagation();
+                                                            setExpandedChecklistPreview((prev) => ({
+                                                              ...prev,
+                                                              [issue.id]: !isExpanded,
+                                                            }));
+                                                          }}
+                                                        >
+                                                          {isExpanded ? 'View less' : `View more (${boardChecklistItems.length - BOARD_CHECKLIST_PREVIEW_COUNT})`}
+                                                        </button>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })()}
 
-                                                  {/* <div className="flex items-center justify-between gap-2">
+                                                {/* <div className="flex items-center justify-between gap-2">
                                                     <Badge className={cn('gap-1', ISSUE_SEVERITY_DISPLAY[issue.severity].color)}>
                                                       <SeverityIcon className="h-3 w-3" />
                                                       {ISSUE_SEVERITY_DISPLAY[issue.severity].label}
@@ -834,44 +966,44 @@ export function IssuesView({
                                                     )}
                                                   </div> */}
 
-                                                  <div className="flex items-center justify-between pt-1">
-                                                    <div className="flex -space-x-2">
-                                                      {(issue.assignees || []).slice(0, 3).map((assignee) => (
-                                                        <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
-                                                          <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
-                                                          <AvatarFallback className="text-[9px] bg-muted">{assignee.initials}</AvatarFallback>
-                                                        </Avatar>
-                                                      ))}
-                                                      {(issue.assignees || []).length > 3 && (
-                                                        <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
-                                                          <span className="text-[8px] text-muted-foreground font-medium">+{(issue.assignees || []).length - 3}</span>
-                                                        </div>
-                                                      )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                      <AttachmentBadges
-                                                        attachmentCounts={issue.attachmentCounts}
-                                                        videoLinksCount={issue.videoLinks?.length ?? 0}
-                                                        className="text-[10px]"
-                                                      />
-                                                      {issue.dueDate && (
-                                                        <span className="text-[10px] text-muted-foreground">
-                                                          {new Date(issue.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                                                        </span>
-                                                      )}
-                                                    </div>
+                                                <div className="flex items-center justify-between pt-1">
+                                                  <div className="flex -space-x-2">
+                                                    {(issue.assignees || []).slice(0, 3).map((assignee) => (
+                                                      <Avatar key={assignee.id} className="h-5 w-5 border-2 border-background">
+                                                        <AvatarImage src={resolveFileUrl(assignee.avatar) ?? assignee.avatar} alt={assignee.name} />
+                                                        <AvatarFallback className="text-[9px] bg-muted">{assignee.initials}</AvatarFallback>
+                                                      </Avatar>
+                                                    ))}
+                                                    {(issue.assignees || []).length > 3 && (
+                                                      <div className="h-5 w-5 rounded-full bg-muted flex items-center justify-center border-2 border-background z-10">
+                                                        <span className="text-[8px] text-muted-foreground font-medium">+{(issue.assignees || []).length - 3}</span>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                  <div className="flex items-center gap-2">
+                                                    <AttachmentBadges
+                                                      attachmentCounts={issue.attachmentCounts}
+                                                      videoLinksCount={issue.videoLinks?.length ?? 0}
+                                                      className="text-[10px]"
+                                                    />
+                                                    {issue.dueDate && (
+                                                      <span className="text-[10px] text-muted-foreground">
+                                                        {new Date(issue.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                      </span>
+                                                    )}
                                                   </div>
                                                 </div>
-                                              </Card>
-                                            )}
-                                          </Draggable>
-                                        );
-                                      })
-                                    )}
-                                    {issuesProvided.placeholder}
-                                  </div>
-                                )}
-                              </Droppable>
+                                              </div>
+                                            </Card>
+                                          )}
+                                        </Draggable>
+                                      );
+                                    })
+                                  )}
+                                  {issuesProvided.placeholder}
+                                </div>
+                              )}
+                            </Droppable>
                           );
 
                           if (isMobile) {
@@ -967,9 +1099,7 @@ export function IssuesView({
                                 {addIssueButton}
                               </div>
 
-                              <div className="flex-1 overflow-y-auto min-h-0">
-                                {cardsDroppable}
-                              </div>
+                              {cardsDroppable}
                             </div>
                           );
                         }}
@@ -982,55 +1112,21 @@ export function IssuesView({
                   <div className={isMobile ? 'w-full' : 'w-[280px] flex-shrink-0'}>
                     <div className={isMobile ? 'pb-1' : 'sticky top-0 bg-background z-10 pb-3 space-y-3'}>
                       {!isMobile && (
-                      <div className="flex items-center gap-2 px-1">
-                        <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
-                        <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
-                      </div>
+                        <div className="flex items-center gap-2 px-1">
+                          <div className="w-2 h-2 rounded-full bg-muted-foreground/30" />
+                          <h3 className="font-medium text-sm text-muted-foreground">Add Bucket</h3>
+                        </div>
                       )}
-                      <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
-                        <DialogTrigger asChild>
-                          <div className="px-2">
-                            <Button
-                              variant="ghost"
-                              className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
-                            >
-                              <Plus className="h-3 w-3 mr-1" />
-                              Add New Bucket
-                            </Button>
-                          </div>
-                        </DialogTrigger>
-                        <DialogContent>
-                          <DialogHeader>
-                            <DialogTitle>Add New Bucket</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-4 pt-4">
-                            <div className="space-y-2">
-                              <Label>Bucket Name</Label>
-                              <Input
-                                placeholder="e.g., In Review"
-                                value={newColumnName}
-                                maxLength={30}
-                                onChange={(e) => setNewColumnName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleAddColumn()}
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label>Color</Label>
-                              <ColorSwatchPicker
-                                value={newColumnColor}
-                                onChange={setNewColumnColor}
-                              />
-                            </div>
-                            <Button
-                              onClick={handleAddColumn}
-                              disabled={!newColumnName.trim() || createIssueColumn.isPending}
-                              className="w-full"
-                            >
-                              Add Bucket
-                            </Button>
-                          </div>
-                        </DialogContent>
-                      </Dialog>
+                      <div className="px-2">
+                        <Button
+                          variant="ghost"
+                          className="w-full h-8 text-xs text-muted-foreground hover:text-foreground border border-dashed border-muted-foreground/30 hover:border-muted-foreground/50"
+                          onClick={() => setIsAddColumnOpen(true)}
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Add New Bucket
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1039,87 +1135,152 @@ export function IssuesView({
           </Droppable>
         </DragDropContext>
       ) : isMobile ? (
-        sortedIssues.length === 0 ? (
-          <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-            No issues found
+        <div className="space-y-4">
+          {/* Bucket filter pills */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-4 px-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            <button
+              type="button"
+              onClick={() => setSelectedMobileStatus('all')}
+              className={cn(
+                'shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium border transition-colors',
+                activeMobileStatus === 'all'
+                  ? 'bg-foreground text-background border-foreground'
+                  : 'bg-background text-foreground border-border'
+              )}
+            >
+              All
+              <span className={cn('text-xs', activeMobileStatus === 'all' ? 'opacity-70' : 'text-muted-foreground')}>
+                {sortedIssues.length}
+              </span>
+            </button>
+            {mobileBuckets.map((bucket) => (
+              <button
+                key={bucket.key}
+                type="button"
+                onClick={() => setSelectedMobileStatus(bucket.key)}
+                className={cn(
+                  'shrink-0 flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium border transition-colors',
+                  activeMobileStatus === bucket.key
+                    ? 'bg-foreground text-background border-foreground'
+                    : 'bg-background text-foreground border-border'
+                )}
+              >
+                {bucket.label}
+                <span className={cn('text-xs', activeMobileStatus === bucket.key ? 'opacity-70' : 'text-muted-foreground')}>
+                  {bucket.count}
+                </span>
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setIsAddColumnOpen(true)}
+              aria-label="Add New Bucket"
+              className="shrink-0 flex items-center justify-center h-8 w-8 rounded-full border border-dashed border-muted-foreground/40 text-muted-foreground active:bg-muted transition-colors"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {paginatedIssues.map((issue) => {
-              const severityDisplay = ISSUE_SEVERITY_DISPLAY[issue.severity];
-              const SeverityIcon = severityDisplay.icon;
-              const CategoryIcon = categoryConfig[issue.category].icon;
-              const statusBadge = getStatusBadge(issue.status);
-              const primaryAssignee = issue.assignees?.[0] ?? issue.reportedBy;
 
-              return (
-                <Card
-                  key={issue.id}
-                  onClick={() => handleIssueClick(issue)}
-                  className="p-4 rounded-2xl cursor-pointer active:bg-muted/40 transition-colors"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <Badge className={cn('gap-1 shrink-0', severityDisplay.color)}>
-                      <SeverityIcon className="h-3 w-3" />
-                      {severityDisplay.label}
-                    </Badge>
-                    <Badge variant="outline" className={cn('shrink-0', statusBadge.color)}>
-                      {statusBadge.label}
-                    </Badge>
+          {mobileGroupedSections.length === 0 ? (
+            <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+              No issues found
+            </div>
+          ) : (
+            <div className="space-y-5">
+              {mobileGroupedSections.map((group) => (
+                <div key={group.key} className="space-y-3">
+                  <div className="flex items-center gap-2 px-0.5">
+                    <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: group.color }} />
+                    <h3 className="text-sm font-semibold">{group.label}</h3>
+                    <span className="text-xs text-muted-foreground">{group.items.length}</span>
                   </div>
 
-                  <h4 className="font-semibold text-[15px] leading-snug mt-2.5">{issue.title}</h4>
+                  <div className="space-y-3">
+                    {group.items.map((issue) => {
+                      const severityDisplay = ISSUE_SEVERITY_DISPLAY[issue.severity];
+                      const SeverityIcon = severityDisplay.icon;
+                      const CategoryIcon = categoryConfig[issue.category].icon;
+                      const statusBadge = getStatusBadge(issue.status);
+                      const primaryAssignee = issue.assignees?.[0] ?? issue.reportedBy;
 
-                  {issue.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{issue.description}</p>
-                  )}
+                      return (
+                        <Card
+                          key={issue.id}
+                          onClick={() => handleIssueClick(issue)}
+                          className="p-4 rounded-2xl cursor-pointer active:bg-muted/40 transition-colors"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <Badge className={cn('gap-1 shrink-0', severityDisplay.color)}>
+                              <SeverityIcon className="h-3 w-3" />
+                              {severityDisplay.label}
+                            </Badge>
+                            <Badge variant="outline" className={cn('shrink-0', statusBadge.color)}>
+                              {statusBadge.label}
+                            </Badge>
+                          </div>
 
-                  <Separator className="my-3" />
+                          {getDisplayId(projectCode, 'I', issue.number) && (
+                            <span className="font-mono font-semibold text-[11px] text-blue-500 block mt-2.5">
+                              {getDisplayId(projectCode, 'I', issue.number)}
+                            </span>
+                          )}
+                          <h4 className={cn('font-semibold text-[15px] leading-snug', !getDisplayId(projectCode, 'I', issue.number) && 'mt-2.5')}>{issue.title}</h4>
 
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Avatar className="h-6 w-6 shrink-0">
-                        <AvatarImage src={resolveFileUrl(primaryAssignee.avatar) ?? primaryAssignee.avatar} alt={primaryAssignee.name} />
-                        <AvatarFallback className="text-[10px] bg-muted">{primaryAssignee.initials}</AvatarFallback>
-                      </Avatar>
-                      <span className="text-xs text-muted-foreground truncate min-w-0">{primaryAssignee.name}</span>
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                        <CategoryIcon className="h-3.5 w-3.5" />
-                        {getCategoryLabel(issue)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <AttachmentBadges
-                        attachmentCounts={issue.attachmentCounts}
-                        videoLinksCount={issue.videoLinks?.length ?? 0}
-                        className="text-xs"
-                        iconClassName="h-3.5 w-3.5"
-                      />
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
-                        <Calendar className="h-3.5 w-3.5" />
-                        {new Date(issue.reportedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </span>
-                    </div>
+                          {issue.description && (
+                            <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{issue.description}</p>
+                          )}
+
+                          <Separator className="my-3" />
+
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Avatar className="h-6 w-6 shrink-0">
+                                <AvatarImage src={resolveFileUrl(primaryAssignee.avatar) ?? primaryAssignee.avatar} alt={primaryAssignee.name} />
+                                <AvatarFallback className="text-[10px] bg-muted">{primaryAssignee.initials}</AvatarFallback>
+                              </Avatar>
+                              <span className="text-xs text-muted-foreground truncate min-w-0">{primaryAssignee.name}</span>
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                                <CategoryIcon className="h-3.5 w-3.5" />
+                                {getCategoryLabel(issue)}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <AttachmentBadges
+                                attachmentCounts={issue.attachmentCounts}
+                                videoLinksCount={issue.videoLinks?.length ?? 0}
+                                className="text-xs"
+                                iconClassName="h-3.5 w-3.5"
+                              />
+                              <span className="flex items-center gap-1 text-xs text-muted-foreground shrink-0">
+                                <Calendar className="h-3.5 w-3.5" />
+                                {new Date(issue.reportedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                              </span>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
                   </div>
-                </Card>
-              );
-            })}
-          </div>
-        )
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
         <div className="rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-[80px]">Priority</TableHead>
-                <TableHead className="w-[300px]">Issue</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Blocking</TableHead>
-                <TableHead>Assigned</TableHead>
-                <TableHead>Reported</TableHead>
-              </TableRow>
-            </TableHeader>
+          <div className="max-h-[calc(100vh-320px)] min-h-[240px] overflow-y-auto">
+            <Table containerClassName="relative w-full overflow-visible">
+              <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
+                <TableRow className="bg-background">
+                  <TableHead className="w-[80px] sticky top-0 z-10 bg-background">Priority</TableHead>
+                  <TableHead className="w-[300px] sticky top-0 z-10 bg-background">Issue</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Category</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Status</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Blocking</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Assigned</TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-background">Reported</TableHead>
+                </TableRow>
+              </TableHeader>
             <TableBody>
               {paginatedIssues.length === 0 ? (
                 <TableRow>
@@ -1153,6 +1314,11 @@ export function IssuesView({
                             </div>
                           )}
                           <div className="min-w-0">
+                            {getDisplayId(projectCode, 'I', issue.number) && (
+                              <span className="font-mono font-semibold text-[11px] text-blue-500 block">
+                                {getDisplayId(projectCode, 'I', issue.number)}
+                              </span>
+                            )}
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <p className="font-medium line-clamp-2 cursor-pointer">{issue.title}</p>
@@ -1216,9 +1382,45 @@ export function IssuesView({
             </TableBody>
           </Table>
         </div>
+      </div>
       )}
 
-      {viewMode !== 'kanban' && issuesPaginationControls}
+      {viewMode !== 'kanban' && !isMobile && issuesPaginationControls}
+
+      {/* Add Bucket Dialog — shared by the desktop board and the mobile bucket pills */}
+      <Dialog open={isAddColumnOpen} onOpenChange={setIsAddColumnOpen}>
+        <DialogContent className="w-[calc(100%-2rem)] rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Add New Bucket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <Label>Bucket Name</Label>
+              <Input
+                placeholder="e.g., In Review"
+                value={newColumnName}
+                maxLength={30}
+                onChange={(e) => setNewColumnName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddColumn()}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Color</Label>
+              <ColorSwatchPicker
+                value={newColumnColor}
+                onChange={setNewColumnColor}
+              />
+            </div>
+            <Button
+              onClick={handleAddColumn}
+              disabled={!newColumnName.trim() || createIssueColumn.isPending}
+              className="w-full"
+            >
+              Add Bucket
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Rename Bucket Dialog */}
       <Dialog
@@ -1230,7 +1432,7 @@ export function IssuesView({
           }
         }}
       >
-        <DialogContent>
+        <DialogContent className="w-[calc(100%-2rem)] rounded-2xl">
           <DialogHeader>
             <DialogTitle>Rename Bucket</DialogTitle>
           </DialogHeader>
@@ -1269,6 +1471,7 @@ export function IssuesView({
         userProjectRole={userProjectRole}
         mode={modalMode}
         onCreate={handleCreateSubmit}
+        projectCode={projectCode}
       />
     </div>
   );

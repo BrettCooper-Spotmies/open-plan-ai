@@ -1,6 +1,6 @@
 // Project Utility Functions
 
-import { Task, Milestone, Issue, Module, ModuleType } from '@/types';
+import { Task, Milestone, Issue, Module, ModuleType, DEFAULT_TASK_STATUSES } from '@/types';
 
 /**
  * Calculate milestone progress from linked tasks
@@ -188,6 +188,24 @@ export function sortMilestonesByDate(milestones: Milestone[]): Milestone[] {
 }
 
 /**
+ * Sort tasks/issues so items assigned to `assigneeId` come first — used to
+ * surface a milestone assignee's own work at the top of the Linked
+ * Tasks/Issues lists. A stable sort, so relative order within each group is
+ * unchanged. No-op when there's no assignee to prioritize.
+ */
+export function sortByAssignee<T extends { assignees?: { id: string }[] }>(
+  items: T[],
+  assigneeId?: string | null,
+): T[] {
+  if (!assigneeId) return items;
+  return [...items].sort((a, b) => {
+    const aAssigned = a.assignees?.some(m => m.id === assigneeId) ? 0 : 1;
+    const bAssigned = b.assignees?.some(m => m.id === assigneeId) ? 0 : 1;
+    return aAssigned - bAssigned;
+  });
+}
+
+/**
  * Progress breakdown interface
  */
 export interface ProgressBreakdown {
@@ -203,8 +221,11 @@ export interface ProgressBreakdown {
     review: number;
     done: number;
     blocked: number;
+    others: number;
   };
 }
+
+const KNOWN_TASK_STATUSES = new Set<string>(DEFAULT_TASK_STATUSES);
 
 /**
  * Calculate project progress as an average of modules, milestones, tasks, and issues
@@ -275,6 +296,9 @@ export function calculateProjectProgress(
       review: tasks.filter(t => t.status === 'review').length,
       done: tasks.filter(t => t.status === 'done').length,
       blocked: tasks.filter(t => t.status === 'blocked').length,
+      // Tasks sitting in a custom Kanban column (a bucket beyond the 5
+      // default statuses) still need to be counted somewhere.
+      others: tasks.filter(t => !KNOWN_TASK_STATUSES.has(t.status)).length,
     }
   };
 }

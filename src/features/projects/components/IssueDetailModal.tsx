@@ -13,7 +13,7 @@ import {
   IssueSeverity,
   TeamMember,
 } from '@/types';
-import { IssueDetailContent } from './IssueDetailContent';
+import { IssueDetailContent, IssueDetailContentHandle } from './IssueDetailContent';
 import { Button } from '@/components/ui/button';
 import { DialogClose } from '@/components/ui/dialog';
 import {
@@ -23,14 +23,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Trash2, Maximize2, MoreVertical, Check, ChevronLeft, X, Pencil } from 'lucide-react';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useLayoutEffect, useMemo, useRef } from 'react';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { toast } from 'sonner';
 import { logger } from '@/services/monitoring/logger';
 import { useAuth } from '@/contexts/AuthContext';
 import { useProjectPermissions } from '@/hooks/useProjectPermissions';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { cn } from '@/lib/utils';
+import { cn, getDisplayId } from '@/lib/utils';
+import { serializeBlocksForDirtyCheck } from '@/lib/descriptionBlocks';
 
 interface IssueDetailModalProps {
   issue: Issue | null;
@@ -45,6 +46,8 @@ interface IssueDetailModalProps {
   onCreate?: (issue: Issue, pendingFiles?: File[]) => void;
   /** Shown as a read-only "Project" field when provided. Only pass this from contexts (like My Day) where the issue's project isn't already implied by the surrounding page. */
   projectName?: string;
+  /** Project's short display-ID prefix — renders a "{projectCode}-I-{number}" pill next to the title when both this and the issue's number are available. */
+  projectCode?: string;
 }
 
 const serializeIssueForDirtyCheck = (issue: Issue): string => {
@@ -55,6 +58,7 @@ const serializeIssueForDirtyCheck = (issue: Issue): string => {
   return JSON.stringify({
     title: issue.title || '',
     description: issue.description || '',
+    descriptionBlocks: serializeBlocksForDirtyCheck(issue.descriptionBlocks),
     category: issue.category,
     categoryOther: issue.categoryOther || '',
     severity: issue.severity,
@@ -91,6 +95,7 @@ export function IssueDetailModal({
   mode = 'view',
   onCreate,
   projectName,
+  projectCode,
 }: IssueDetailModalProps) {
   const navigate = useNavigate();
   const { user: profile } = useAuth();
@@ -101,6 +106,7 @@ export function IssueDetailModal({
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [isMobileEditMode, setIsMobileEditMode] = useState(false);
   const initialSnapshotRef = useRef<string>('');
+  const issueContentRef = useRef<IssueDetailContentHandle>(null);
   const { canEditResource, canDeleteResource } = useProjectPermissions(editedIssue?.projectId);
   const canEditIssue = useMemo(
     () =>
@@ -117,7 +123,12 @@ export function IssueDetailModal({
   const editLockTitle = 'You can only edit items you created or are assigned to';
   const deleteLockTitle = 'Only the issue reporter or a project/organization Admin can delete this issue';
 
-  useEffect(() => {
+  // useLayoutEffect (not useEffect) — this runs synchronously before the
+  // browser paints, so switching to a different issue while the modal is
+  // already open (or reopening the same modal instance for a new one)
+  // doesn't briefly flash the PREVIOUS issue's content for a frame before
+  // this resets editedIssue to the new one.
+  useLayoutEffect(() => {
     if (isOpen && issue) {
       setEditedIssue(issue);
       setPendingFiles([]);
@@ -152,11 +163,12 @@ export function IssueDetailModal({
     }
   };
 
-  const handleUpdateIssue = () => {
-    if (editedIssue) {
+  const handleUpdateIssue = async () => {
+    if (editedIssue && isDirty) {
       onUpdate(editedIssue);
-      onClose();
+      await issueContentRef.current?.commitPendingComments();
     }
+    onClose();
   };
 
   return (
@@ -164,9 +176,9 @@ export function IssueDetailModal({
       <DialogContent
         hideClose
         className={cn(
-          'p-0 flex flex-col gap-0 overflow-hidden',
+          'p-0 flex flex-col gap-0 overflow-hidden !duration-0 data-[state=open]:!animate-none data-[state=closed]:!animate-none',
           isMobile
-            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0'
+            ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 data-[state=open]:slide-in-from-left-0 data-[state=open]:slide-in-from-top-0 data-[state=closed]:slide-out-to-left-0 data-[state=closed]:slide-out-to-top-0 data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom duration-300 data-[state=open]:zoom-in-100 data-[state=closed]:zoom-out-100'
             : 'max-w-4xl max-h-[90vh]'
         )}
         onPointerDownOutside={(e) => e.preventDefault()}
@@ -222,7 +234,7 @@ export function IssueDetailModal({
                 ) : (
                   <DropdownMenuItem
                     onClick={handleUpdateIssue}
-                    disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
+                    disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory || !isDirty}
                   >
                     <Check className="h-4 w-4 mr-2" />
                     Update Issue
@@ -246,7 +258,14 @@ export function IssueDetailModal({
         {/* Header - view mode, desktop: label + expand + close */}
         {mode !== 'create' && !isMobile && (
           <div className="flex items-center justify-between px-6 py-3 border-b shrink-0">
-            <DialogTitle className="text-sm font-medium text-muted-foreground">Issue</DialogTitle>
+            <div className="flex items-center gap-2">
+              <DialogTitle className="text-sm font-medium text-muted-foreground">Issue</DialogTitle>
+              {getDisplayId(projectCode, 'I', editedIssue?.number) && (
+                <span className="font-mono font-semibold text-[12px] text-blue-500">
+                  {getDisplayId(projectCode, 'I', editedIssue?.number)}
+                </span>
+              )}
+            </div>
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
@@ -256,7 +275,6 @@ export function IssueDetailModal({
                 onClick={() => {
                   if (editedIssue.projectId) {
                     navigate(`/projects/${editedIssue.projectId}/issues/${editedIssue.id}/full`);
-                    onClose();
                   } else {
                     logger.warn('Could not expand issue: missing projectId', { issueId: editedIssue.id });
                   }
@@ -281,10 +299,12 @@ export function IssueDetailModal({
         )}>
           <div className="p-6">
             <IssueDetailContent
+              ref={issueContentRef}
               issue={editedIssue}
               tasks={tasks}
               teamMembers={teamMembers}
               projectName={projectName}
+              projectCode={projectCode}
               onUpdate={setEditedIssue}
               onDelete={undefined}
               isDraft={true} // Always pretend it's draft to enable auto-callbacks to onUpdate instead of parent
@@ -301,7 +321,7 @@ export function IssueDetailModal({
             <Button
               className="w-full"
               onClick={handleUpdateIssue}
-              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
+              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory || !isDirty}
             >
               Update Issue
             </Button>
@@ -344,8 +364,8 @@ export function IssueDetailModal({
             <Button variant="outline" onClick={attemptClose}>Cancel</Button>
             <Button
               onClick={handleUpdateIssue}
-              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory}
-              title={canEditIssue ? undefined : editLockTitle}
+              disabled={!editedIssue.title.trim() || !canEditIssue || !hasValidCategory || !isDirty}
+              title={canEditIssue ? undefined : (isDirty ? editLockTitle : 'No changes to save')}
             >
               Update Issue
             </Button>

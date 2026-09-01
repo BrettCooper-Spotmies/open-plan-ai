@@ -1,15 +1,22 @@
-// Inventory (stock) types, mock data, and helpers.
+// Inventory (stock) types and pure helpers.
 //
-// Parts themselves are real — see useOrgParts/useCreatePart in src/hooks/useParts.ts,
-// backed by the org's actual Parts catalog. On-hand/allocated/location/ledger data below
-// has no backend yet (confirmed nothing exists in either repo), so it follows the same
-// "mock data only" precedent as requirementsData.ts: local types + a seed generator, with
-// the ledger held in the InventoryView orchestrator's local state.
+// Stock/orders/transactions/builds are persisted via the real backend — see
+// src/services/inventory.service.ts and src/hooks/useInventory.ts. This file holds only
+// backend-agnostic types, coverage/netting math (computeCoverage, availableOf, onOrderOf,
+// buildFromDef), and display components (LocationCombobox, CategoryCombobox, CoveragePill,
+// CoverageBar) that both real and (formerly) mock data flowed through unchanged.
 
-import { bomFlatAll, type BOMNode, type BOMCategory } from './bomData';
+import { useState, useEffect, useMemo } from 'react';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { KNOWN_BOM_CATEGORIES, UOM_OPTIONS, type BOMCategory } from './bomData';
 
 export const STOCK_LOCATIONS = ['Lab Shelf A', 'Lab Shelf B', 'Incoming Dock', 'CM', 'Quarantine'] as const;
-export type StockLocation = typeof STOCK_LOCATIONS[number];
+// Locations are free-text (mirrors the BOMCategory custom-category pattern) — the presets
+// above are just suggestions surfaced in pickers, not a closed set the hardware team is
+// still deciding per-part-type constraints for.
+export type StockLocation = string;
 
 export type CoverageStatus = 'ready' | 'covered-by-order' | 'short' | 'conflict';
 
@@ -18,28 +25,324 @@ export interface StockRecord {
   partId: string;   // links to ApiPartResponse.id in the real Parts catalog
   pn: string;
   name: string;
+  mpn?: string;
+  manufacturer?: string;
   cat: BOMCategory;
   onHand: number;
   allocated: number;
   onOrder: number;
   location: StockLocation;
   leadTimeDays: number;
-  lotSerial?: string;
+  lotNumber?: string;
+  serialNumber?: string;
   quarantineQty?: number;
   imageUrl?: string;   // part photo, when the catalog entry has one — falls back to a category icon
+}
+
+export interface OrderRecord {
+  id: string;
+  partId: string;
+  pn: string;
+  quantity: number;
+  remainingQty: number;
+  expectedDate: string;   // ISO
+  leadTimeDays?: number;
+  supplierRef?: string;
+  unitCost?: number;
+  location: string;
+  note?: string;
+  description?: string;
+  purpose?: string;
+  lotNumber?: string;
+  serialNumber?: string;
+  status: 'planned' | 'open' | 'partially_received' | 'received' | 'cancelled';
+  createdAt: string;
+  createdBy: string;
+}
+
+const CUSTOM_LOCATION_SENTINEL = '__custom_location__';
+
+/** Location picker: preset dropdown with a "custom" escape hatch — same pattern as
+ * BOMCategory's free-text + preset-list combo (bomData.ts). `knownLocations` (from
+ * useLocations) is merged in alongside the hardcoded presets, so a custom location
+ * saved once (the backend auto-registers it on receive/adjust/order) shows up as a
+ * preset the next time this picker opens instead of only ever living on that one
+ * transaction. */
+export function LocationCombobox({ value, onChange, placeholder = 'Select a location...', knownLocations = [] }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; knownLocations?: string[];
+}) {
+  const options = [
+    ...STOCK_LOCATIONS,
+    ...knownLocations.filter((loc) => !(STOCK_LOCATIONS as readonly string[]).includes(loc)).sort(),
+  ];
+
+  const [customMode, setCustomMode] = useState(
+    () => value !== '' && !options.includes(value)
+  );
+
+  useEffect(() => {
+    if (value === '') setCustomMode(false);
+  }, [value]);
+
+  if (customMode) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Enter custom location..."
+          autoFocus
+        />
+        <Button type="button" variant="outline" size="sm" onClick={() => { setCustomMode(false); onChange(''); }}>
+          Presets
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      onValueChange={(v) => {
+        if (v === CUSTOM_LOCATION_SENTINEL) {
+          // Deferred a tick: swapping to the custom Input unmounts this Select's own DOM
+          // node, which — done synchronously inside its own onValueChange — races Radix's
+          // internal close/focus-restore for that same click and gets silently discarded
+          // (the dropdown just closes with nothing changed). Letting that finish first
+          // before we swap avoids the race.
+          setTimeout(() => { setCustomMode(true); onChange(''); }, 0);
+        } else {
+          onChange(v);
+        }
+      }}
+      value={value}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((loc) => (
+          <SelectItem key={loc} value={loc}>{loc}</SelectItem>
+        ))}
+        <SelectItem value={CUSTOM_LOCATION_SENTINEL}>Other (custom)…</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+const CUSTOM_CATEGORY_SENTINEL = '__custom_category__';
+
+function formatCategoryOptionLabel(category: string): string {
+  return category
+    .trim()
+    .split(/[_-]+|\s+/)
+    .filter(Boolean)
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/** Category picker for new-part creation: preset dropdown (the 7 known BOM categories, plus
+ * any custom categories already in use — passed in via `extraCategories`) with a custom escape
+ * hatch, so a category typed here shows up as a real filter later instead of being silently
+ * limited to the fixed preset list. */
+export function CategoryCombobox({ value, onChange, placeholder = 'Select a category...', extraCategories = [] }: {
+  value: string; onChange: (v: string) => void; placeholder?: string; extraCategories?: string[];
+}) {
+  const options = useMemo(() => {
+    const extra = Array.from(new Set(extraCategories)).filter(
+      cat => !(KNOWN_BOM_CATEGORIES as readonly string[]).includes(cat)
+    );
+    return [...KNOWN_BOM_CATEGORIES, ...extra];
+  }, [extraCategories]);
+
+  const [customMode, setCustomMode] = useState(
+    () => value !== '' && !options.includes(value)
+  );
+  const [customValue, setCustomValue] = useState(
+    () => (value !== '' && !options.includes(value) ? value : '')
+  );
+
+  useEffect(() => {
+    if (value === '') {
+      setCustomMode(false);
+      setCustomValue('');
+      return;
+    }
+
+    if (!options.includes(value)) {
+      setCustomMode(true);
+      setCustomValue(value);
+    }
+  }, [value, options]);
+
+  if (customMode) {
+    return (
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <Input
+            value={customValue}
+            onChange={(e) => {
+              const nextValue = e.target.value;
+              setCustomValue(nextValue);
+              onChange(nextValue);
+            }}
+            placeholder="Enter custom category..."
+            autoFocus
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCustomMode(false);
+              setCustomValue('');
+              onChange('');
+            }}
+          >
+            Presets
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Custom categories will also appear in the inventory category chips.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      onValueChange={(v) => {
+        if (v === CUSTOM_CATEGORY_SENTINEL) {
+          // See LocationCombobox's identical deferral above — swapping to the custom
+          // Input unmounts this Select from inside its own onValueChange, which races
+          // Radix's close/focus-restore and silently gets discarded if done synchronously.
+          setTimeout(() => {
+            setCustomMode(true);
+            setCustomValue('');
+            onChange('');
+          }, 0);
+        } else {
+          onChange(v);
+        }
+      }}
+      value={options.includes(value) ? value : ''}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((c) => (
+          <SelectItem key={c} value={c}>{formatCategoryOptionLabel(c)}</SelectItem>
+        ))}
+        <SelectItem value={CUSTOM_CATEGORY_SENTINEL}>Other (custom)…</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
+const CUSTOM_UNIT_SENTINEL = '__custom_unit__';
+
+/** Unit-of-measure picker for new-part creation: preset dropdown (UOM_OPTIONS from bomData.ts —
+ * the same list BOMPartSheet's UOM toggle buttons use) with a custom escape hatch, so a unit
+ * typed here isn't limited to the fixed preset list. */
+export function UnitCombobox({ value, onChange, placeholder = 'Select a unit...' }: {
+  value: string; onChange: (v: string) => void; placeholder?: string;
+}) {
+  const options = UOM_OPTIONS as readonly string[];
+
+  const [customMode, setCustomMode] = useState(
+    () => value !== '' && !options.includes(value)
+  );
+  const [customValue, setCustomValue] = useState(
+    () => (value !== '' && !options.includes(value) ? value : '')
+  );
+
+  useEffect(() => {
+    if (value === '') {
+      setCustomMode(false);
+      setCustomValue('');
+      return;
+    }
+
+    if (!options.includes(value)) {
+      setCustomMode(true);
+      setCustomValue(value);
+    }
+  }, [value, options]);
+
+  if (customMode) {
+    return (
+      <div className="flex gap-2">
+        <Input
+          value={customValue}
+          onChange={(e) => {
+            const nextValue = e.target.value;
+            setCustomValue(nextValue);
+            onChange(nextValue);
+          }}
+          placeholder="Enter custom unit..."
+          autoFocus
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setCustomMode(false);
+            setCustomValue('');
+            onChange('');
+          }}
+        >
+          Presets
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <Select
+      onValueChange={(v) => {
+        if (v === CUSTOM_UNIT_SENTINEL) {
+          // Deferred a tick — see LocationCombobox/CategoryCombobox's identical comment above.
+          setTimeout(() => {
+            setCustomMode(true);
+            setCustomValue('');
+            onChange('');
+          }, 0);
+        } else {
+          onChange(v);
+        }
+      }}
+      value={options.includes(value) ? value : ''}
+    >
+      <SelectTrigger>
+        <SelectValue placeholder={placeholder} />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((u) => (
+          <SelectItem key={u} value={u}>{u}</SelectItem>
+        ))}
+        <SelectItem value={CUSTOM_UNIT_SENTINEL}>Custom...</SelectItem>
+      </SelectContent>
+    </Select>
+  );
 }
 
 export interface StockTransaction {
   id: string;
   partId: string;
-  type: 'receive' | 'adjust';
-  direction?: 'add' | 'remove';   // adjust only
+  type: 'receive' | 'adjust' | 'allocate' | 'deallocate' | 'issue' | 'transfer';
+  direction?: 'add' | 'remove';   // adjust/issue only
   qty: number;
   location: StockLocation;
-  reference?: string;              // receive only — PO / expected-receipt reference
-  reasonCode?: string;             // adjust only
+  reference?: string;              // receive: PO / expected-receipt reference. transfer: destination location.
+  reasonCode?: string;             // adjust/issue only
   note?: string;
+  description?: string;            // adjust only
   quarantine?: boolean;            // receive only
+  buildId?: string;                // allocate/deallocate/issue only
+  lotNumber?: string;               // receive/adjust only
+  serialNumber?: string;            // receive/adjust only
+  leadTimeDays?: number;            // adjust only; user-entered lead time from New transaction
   createdAt: string;
   createdBy: string;
 }
@@ -53,7 +356,15 @@ export const REASON_CODES = [
   'Consumed outside system',
 ] as const;
 
-export const availableOf = (r: StockRecord): number => r.onHand - r.allocated;
+export const availableOf = (r: StockRecord): number => r.onHand - r.allocated - (r.quarantineQty ?? 0);
+
+/** Sum of remaining qty across a part's open/partially-received orders — `onOrder` is
+ * derived from real order state rather than a static seeded field. */
+export function onOrderOf(orders: OrderRecord[], partId: string): number {
+  return orders
+    .filter(o => o.partId === partId && (o.status === 'open' || o.status === 'partially_received'))
+    .reduce((sum, o) => sum + o.remainingQty, 0);
+}
 
 /**
  * demandQty is the BOM quantity-required for this part (from BOMNode.qty). Coverage is
@@ -116,104 +427,12 @@ function seededRandom(seed: string): number {
   return (h % 1000) / 1000;
 }
 
-/**
- * Seeds one stock row per unique part actually referenced in the project's BOM tree, so the
- * Inventory table reflects real BOM demand instead of starting empty on every project.
- */
-export function generateMockStock(bomNodes: BOMNode[]): StockRecord[] {
-  const seen = new Map<string, BOMNode>();
-  for (const n of bomFlatAll(bomNodes)) {
-    if (n._partId && n.pn && !seen.has(n._partId)) seen.set(n._partId, n);
-  }
-
-  const nonQuarantineLocations = STOCK_LOCATIONS.filter(l => l !== 'Quarantine');
-
-  return Array.from(seen.values()).map((n) => {
-    const r = seededRandom(n.pn);
-    const demand = n.qty || 1;
-    const onHand = Math.max(0, Math.round(demand * (0.5 + r * 3)));
-    const allocated = Math.round(onHand * (r * 0.6));
-    const onOrder = r > 0.7 ? Math.round(demand * r) : 0;
-    const location = nonQuarantineLocations[Math.floor(r * nonQuarantineLocations.length)];
-
-    return {
-      id: `stk-${n._partId}`,
-      partId: n._partId!,
-      pn: n.pn,
-      name: n.name,
-      cat: n.cat,
-      onHand,
-      allocated,
-      onOrder,
-      location,
-      leadTimeDays: n.leadTime || 14,
-      quarantineQty: r > 0.9 ? Math.max(1, Math.round(onHand * 0.1)) : undefined,
-      lotSerial: r > 0.8 && r <= 0.9 ? `LOT-${n.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
-      imageUrl: r > 0.75 && r <= 0.9 ? `https://picsum.photos/seed/${encodeURIComponent(n.pn)}/400` : undefined,
-    };
-  });
-}
-
-// Static fallback catalog shown whenever a project's BOM is empty (new project, no BOM
-// imported yet, etc.) so Inventory never renders a totally blank table. Spans all seven
-// known BOM categories with plausible EVSE (EV charger) hardware — same domain the category
-// set (Charging Connectors, Power Electronics, ...) implies. Deterministic per-PN like
-// generateMockStock, so numbers stay stable across re-renders.
-const DEMO_PART_DEFS: { pn: string; name: string; cat: BOMCategory; demand: number; leadTime: number }[] = [
-  { pn: 'ASM-1000', name: 'EVSE Charging Station Assembly', cat: 'assembly', demand: 1, leadTime: 21 },
-  { pn: 'ASM-1010', name: 'Charging Cable Reel Assembly',   cat: 'assembly', demand: 1, leadTime: 18 },
-  { pn: 'PWR-2001',  name: 'AC-DC Power Supply Module 3.3kW', cat: 'power', demand: 1, leadTime: 28 },
-  { pn: 'PWR-2015',  name: 'Relay Contactor 32A',              cat: 'power', demand: 2, leadTime: 14 },
-  { pn: 'PWR-2030',  name: 'EMI Filter Module',                cat: 'power', demand: 1, leadTime: 10 },
-  { pn: 'CTL-3001',  name: 'Main Control PCB (ESP32)',         cat: 'control', demand: 1, leadTime: 35 },
-  { pn: 'CTL-3012',  name: 'RS-485 Communication Module',      cat: 'control', demand: 1, leadTime: 12 },
-  { pn: 'CTL-3020',  name: '4G/LTE Cellular Modem',            cat: 'control', demand: 1, leadTime: 40 },
-  { pn: 'CON-4001',  name: 'Type 2 Charging Connector',        cat: 'connector', demand: 1, leadTime: 21 },
-  { pn: 'CON-4010',  name: 'CCS Combo Connector',               cat: 'connector', demand: 1, leadTime: 30 },
-  { pn: 'CON-4020',  name: 'Charging Cable 5m, 32A',            cat: 'connector', demand: 1, leadTime: 15 },
-  { pn: 'ENC-5001',  name: 'IP65 Outdoor Enclosure',            cat: 'enclosure', demand: 1, leadTime: 25 },
-  { pn: 'ENC-5010',  name: 'Mounting Bracket Kit',              cat: 'enclosure', demand: 1, leadTime: 9 },
-  { pn: 'ENC-5020',  name: 'Cable Gland Set',                   cat: 'enclosure', demand: 4, leadTime: 7 },
-  { pn: 'HMI-6001',  name: '7" Touch Display',                  cat: 'hmi', demand: 1, leadTime: 32 },
-  { pn: 'HMI-6010',  name: 'Status LED Ring',                   cat: 'hmi', demand: 1, leadTime: 11 },
-  { pn: 'HMI-6020',  name: 'RFID Card Reader',                  cat: 'hmi', demand: 1, leadTime: 20 },
-  { pn: 'SAF-7001',  name: 'RCD Type B 30mA',                   cat: 'safety', demand: 1, leadTime: 17 },
-  { pn: 'SAF-7010',  name: 'Surge Protection Device',           cat: 'safety', demand: 1, leadTime: 13 },
-  { pn: 'SAF-7020',  name: 'Emergency Stop Button',             cat: 'safety', demand: 1, leadTime: 8 },
-];
-
-export function generateDemoStock(): StockRecord[] {
-  const nonQuarantineLocations = STOCK_LOCATIONS.filter(l => l !== 'Quarantine');
-
-  return DEMO_PART_DEFS.map((d) => {
-    const r = seededRandom(d.pn);
-    const onHand = Math.max(0, Math.round(d.demand * (0.5 + r * 3)));
-    const allocated = Math.round(onHand * (r * 0.6));
-    const onOrder = r > 0.7 ? Math.round(d.demand * r) : 0;
-    const location = nonQuarantineLocations[Math.floor(r * nonQuarantineLocations.length)];
-
-    return {
-      id: `demo-${d.pn}`,
-      partId: `demo-${d.pn}`,
-      pn: d.pn,
-      name: d.name,
-      cat: d.cat,
-      onHand,
-      allocated,
-      onOrder,
-      location,
-      leadTimeDays: d.leadTime,
-      quarantineQty: r > 0.9 ? Math.max(1, Math.round(onHand * 0.1)) : undefined,
-      lotSerial: r > 0.8 && r <= 0.9 ? `LOT-${d.pn}-${Math.floor(r * 9000 + 1000)}` : undefined,
-    };
-  });
-}
-
 export interface BuildLine {
   partId: string;
   pn: string;
   name: string;
   cat: BOMCategory;
+  imageUrl?: string;
   qtyPerUnit: number;
   uom: string;
   required: number;
@@ -222,6 +441,13 @@ export interface BuildLine {
   onOrder: number;
   leadTimeDays: number;
   status: CoverageStatus;
+}
+
+/** Basic user info for a build's assignee — mirrors the backend's inventory.types.ts shape. */
+export interface BuildAssignee {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
 }
 
 export interface Build {
@@ -240,13 +466,47 @@ export interface Build {
   onOrderCount: number;
   shortLines: BuildLine[];
   longestLead: BuildLine | null;
+  status: BuildStatus;
+  assignee: BuildAssignee | null;
 }
 
-const BUILD_DEFS = [
-  { id: 'evt', name: 'EVT Build', type: 'EVT', units: 5, bomRev: 'Rev B', scrapPct: 5, milestone: 'EVT Complete' },
-  { id: 'dvt', name: 'DVT Build', type: 'DVT', units: 25, bomRev: 'Rev C', scrapPct: 3, milestone: 'DVT Build Complete' },
-  { id: 'pvt', name: 'PVT Build', type: 'PVT', units: 100, bomRev: 'Rev C', scrapPct: 2, milestone: 'PVT Kickoff' },
-] as const;
+export type BuildStatus = 'planned' | 'allocated' | 'kitted';
+
+export interface BuildDef {
+  id: string;
+  projectId: string;
+  name: string;
+  type: string;
+  units: number;
+  bomRev: string;
+  scrapPct: number;
+  milestone: string;
+  /** User-entered target date (new builds). Legacy seeded builds omit this and fall back to
+   * a synthetic lateness offset so their numbers stay stable across re-renders. */
+  targetDate?: string;
+  status: BuildStatus;
+  assignee: BuildAssignee | null;
+}
+
+/** One row of a build's own project BOM, joined server-side with current org stock — see
+ * inventory.service.ts `getBuildBomLines` (backend) / `useBuildBomLines` (frontend hook).
+ * Replaces the old client-side `stock.map(...)` over the *entire org's* stock list, which
+ * rendered one BOM-line row per org-wide inventory part instead of per part in this build's BOM. */
+export interface BuildBomLine {
+  partId: string;
+  pn: string;
+  name: string;
+  cat: BOMCategory;
+  imageUrl?: string;
+  qtyPerUnit: number;
+  uom: string;
+  onHand: number;
+  allocated: number;
+  onOrder: number;
+  leadTimeDays: number;
+  required: number;
+  shortage: number;
+}
 
 function addDays(date: Date, days: number): string {
   const d = new Date(date);
@@ -254,47 +514,68 @@ function addDays(date: Date, days: number): string {
   return d.toISOString();
 }
 
+function diffDays(laterIso: string, earlierIso: string): number {
+  return Math.round((new Date(laterIso).getTime() - new Date(earlierIso).getTime()) / 86400000);
+}
+
 export function formatShortDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
 }
 
 /**
- * Builds one "Build" per fixed EVT/DVT/PVT phase, scaling each stocked part's real BOM
- * demand (qty-per-unit from demandByPartId) by that phase's unit count, then reusing
- * computeCoverage against the scaled requirement — so larger builds naturally show more
- * shortages against the same on-hand/on-order stock, same as a real MRP netting would.
+ * Computes one "Build" from a def, scaling each BOM line's real demand (qty-per-unit, from
+ * this build's own project BOM) by the def's unit count, then reusing computeCoverage against
+ * the scaled requirement — so larger builds naturally show more shortages against the same
+ * on-hand/on-order stock, same as a real MRP netting would.
+ *
+ * `bomLines` is scoped to this build's project BOM (one row per part actually used in it) —
+ * NOT the org-wide stock list, so builds from different projects/BOMs never bleed into each
+ * other's line tables.
  */
-export function generateMockBuilds(stock: StockRecord[], demandByPartId: Map<string, number>): Build[] {
+export function buildFromDef(def: BuildDef, bomLines: BuildBomLine[]): Build {
   const now = new Date();
-  return BUILD_DEFS.map((def) => {
-    const lines: BuildLine[] = stock.map((r) => {
-      const qtyPerUnit = demandByPartId.get(r.partId) ?? 1;
-      const required = qtyPerUnit * def.units;
-      const status = computeCoverage(r, required);
-      return {
-        partId: r.partId, pn: r.pn, name: r.name, cat: r.cat,
-        qtyPerUnit, uom: 'EA',
-        required, available: availableOf(r), allocated: r.allocated, onOrder: r.onOrder,
-        leadTimeDays: r.leadTimeDays, status,
-      };
-    });
-
-    const readyCount = lines.filter(l => l.status === 'ready').length;
-    const onOrderCount = lines.filter(l => l.status === 'covered-by-order').length;
-    const shortLines = lines.filter(l => l.status === 'short' || l.status === 'conflict');
-    const longestLead = shortLines.length
-      ? shortLines.reduce((max, l) => (l.leadTimeDays > (max?.leadTimeDays ?? 0) ? l : max), null as BuildLine | null)
-      : null;
-
-    const daysLate = shortLines.length ? Math.round(30 + seededRandom(def.id) * 150) : 0;
-    const projectedDate = addDays(now, longestLead?.leadTimeDays ?? 0);
-    const targetDate = addDays(new Date(projectedDate), -daysLate);
-
+  const lines: BuildLine[] = bomLines.map((r) => {
+    const qtyPerUnit = r.qtyPerUnit || 1;
+    const required = qtyPerUnit * def.units;
+    const stockLike: StockRecord = {
+      id: r.partId, partId: r.partId, pn: r.pn, name: r.name, cat: r.cat,
+      onHand: r.onHand, allocated: r.allocated, onOrder: r.onOrder,
+      location: '', leadTimeDays: r.leadTimeDays,
+    };
+    const status = computeCoverage(stockLike, required);
     return {
-      id: def.id, name: def.name, type: def.type, units: def.units,
-      bomRev: def.bomRev, scrapPct: def.scrapPct, linkedMilestone: def.milestone,
-      targetDate, projectedDate, daysLate,
-      lines, readyCount, onOrderCount, shortLines, longestLead,
+      partId: r.partId, pn: r.pn, name: r.name, cat: r.cat, imageUrl: r.imageUrl,
+      qtyPerUnit, uom: r.uom,
+      required, available: availableOf(stockLike), allocated: r.allocated, onOrder: r.onOrder,
+      leadTimeDays: r.leadTimeDays, status,
     };
   });
+
+  const readyCount = lines.filter(l => l.status === 'ready').length;
+  const onOrderCount = lines.filter(l => l.status === 'covered-by-order').length;
+  const shortLines = lines.filter(l => l.status === 'short' || l.status === 'conflict');
+  const longestLead = shortLines.length
+    ? shortLines.reduce((max, l) => (l.leadTimeDays > (max?.leadTimeDays ?? 0) ? l : max), null as BuildLine | null)
+    : null;
+
+  const projectedDate = addDays(now, longestLead?.leadTimeDays ?? 0);
+
+  let targetDate: string;
+  let daysLate: number;
+  if (def.targetDate) {
+    targetDate = def.targetDate;
+    daysLate = shortLines.length ? Math.max(0, diffDays(projectedDate, targetDate)) : 0;
+  } else {
+    daysLate = shortLines.length ? Math.round(30 + seededRandom(def.id) * 150) : 0;
+    targetDate = addDays(new Date(projectedDate), -daysLate);
+  }
+
+  return {
+    id: def.id, name: def.name, type: def.type, units: def.units,
+    bomRev: def.bomRev, scrapPct: def.scrapPct, linkedMilestone: def.milestone,
+    targetDate, projectedDate, daysLate,
+    lines, readyCount, onOrderCount, shortLines, longestLead,
+    status: def.status, assignee: def.assignee,
+  };
 }
+

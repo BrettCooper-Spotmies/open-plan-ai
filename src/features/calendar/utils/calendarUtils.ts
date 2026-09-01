@@ -48,6 +48,8 @@ export interface CalendarEvent {
   meetingUri?: string;
   htmlLink?: string;
   attendeeEmails?: string[];
+  organizerId?: string;
+  googleEventId?: string | null;
   // Common
   description?: string;
   tags?: string[];
@@ -270,12 +272,11 @@ export function filterCalendarEvents(
       return false;
     }
 
-    // Blocked filter
+    // Blocked filter (dependency state only applies to tasks)
     if (filters.isBlocked !== undefined) {
-      if (event.type === 'task') {
-        if (filters.isBlocked && !event.isBlocked) return false;
-        if (!filters.isBlocked && event.isBlocked) return false;
-      }
+      if (event.type !== 'task') return false;
+      if (filters.isBlocked && !event.isBlocked) return false;
+      if (!filters.isBlocked && event.isBlocked) return false;
     }
 
     // Assigned By filter (task/issue creator — milestones don't carry creator data)

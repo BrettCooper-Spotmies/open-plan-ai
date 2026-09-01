@@ -1,14 +1,22 @@
-import { useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useMemo, useCallback, useState } from 'react';
+import { ChevronUp, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { MessageBubble } from './MessageBubble';
-import { MediaGroupBubble } from './MediaGroupBubble';
+import { MediaGroupBubble, hasRealCaption } from './MediaGroupBubble';
 import { MessageDateDivider } from './MessageDateDivider';
 import { SystemMessage } from './SystemMessage';
 import { CallHistoryCard } from './CallHistoryCard';
 import { EmptyState } from './EmptyState';
 import { ChatMessage, Conversation, ReadReceipt, MessageReaction } from '../types';
 import { parseCallCardContent } from '../utils/callCard';
-import { isSameDay, differenceInMinutes } from 'date-fns';
+import { isSameDay, differenceInMinutes, differenceInSeconds } from 'date-fns';
+
+// A captioned image is always the lead file of its own send action (see
+// MessageInput's handleSend), so it can only belong to a run whose members
+// were uploaded within seconds of it. Without this, the loose 2-minute
+// same-sender window lets a later, unrelated album inherit an earlier
+// caption (or vice versa) purely because they landed close together in time.
+const SAME_BATCH_SECONDS = 30;
 import { Button } from '@/components/ui/button';
 import { useChatStore } from '../stores/useChatStore';
 
@@ -50,6 +58,9 @@ export function MessageArea({
   const prevMessageCountRef = useRef(0);
   const atBottomRef = useRef(true);
   const highlightedRef = useRef<string | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const isPrependingRef = useRef(false);
+  const prependAnchorRef = useRef<{ id: string; top: number } | null>(null);
   const isGroup = conversation.type === 'group';
   const searchQuery = useChatStore((s) => s.messageSearchQuery);
 
@@ -77,6 +88,24 @@ export function MessageArea({
     }
   }, [conversation.id, messages.length, scrollToBottom]);
 
+  // Older-history load: keep the reader's viewport anchored on the message
+  // that was topmost before the load, tracked by its own DOM node rather
+  // than the container's scrollHeight — a height-diff approach breaks when
+  // newly prepended content (images, meet/calendar cards) keeps growing
+  // asynchronously after this measurement. Runs before paint so there's no
+  // visible flash.
+  useLayoutEffect(() => {
+    const anchor = prependAnchorRef.current;
+    if (!anchor) return;
+    const container = scrollRef.current;
+    const anchorEl = document.getElementById(anchor.id);
+    if (container && anchorEl) {
+      const newTop = anchorEl.getBoundingClientRect().top;
+      container.scrollTop += newTop - anchor.top;
+    }
+    prependAnchorRef.current = null;
+  }, [messages.length]);
+
   // On new messages in the same conversation: smooth scroll only if already at bottom
   useEffect(() => {
     const isNewConv = prevConvIdRef.current !== conversation.id;
@@ -86,13 +115,28 @@ export function MessageArea({
     const newCount = messages.length;
 
     if (newCount <= prevCount) {
+      isPrependingRef.current = false;
       prevMessageCountRef.current = newCount;
       return;
     }
 
-    // Messages were appended (new messages, not history load)
-    // Only auto-scroll if user was already at the bottom
-    if (atBottomRef.current) {
+    // Older messages were prepended by "Load older messages" — the layout
+    // effect above already restored scroll position, so don't also run the
+    // auto-scroll-to-bottom logic below for this growth.
+    if (isPrependingRef.current) {
+      isPrependingRef.current = false;
+      prevMessageCountRef.current = newCount;
+      return;
+    }
+
+    // Messages were appended (new messages, not history load). Always jump to
+    // bottom for a message you just sent yourself — you're waiting to see it
+    // land, regardless of where you'd scrolled to reading history — otherwise
+    // only auto-scroll if you were already at the bottom (so someone else's
+    // message doesn't yank you away from what you're reading).
+    const lastMessage = messages[messages.length - 1];
+    const isOwnMessage = lastMessage?.senderId === user?.id;
+    if (atBottomRef.current || isOwnMessage) {
       scrollToBottom('smooth');
     }
 
@@ -135,6 +179,25 @@ export function MessageArea({
     onHighlightHandled?.();
   }, [highlightMessageId, messageById, hasMore, onLoadMore, onHighlightHandled]);
 
+  const handleLoadMore = useCallback(() => {
+    if (!onLoadMore || isLoadingMore) return;
+    const container = scrollRef.current;
+    // Anchor on the topmost currently-visible message so the layout effect
+    // above can pin the viewport to it after older messages are prepended.
+    const anchorEl = container?.querySelector<HTMLElement>('[id^="msg-"]');
+    if (anchorEl) {
+      isPrependingRef.current = true;
+      prependAnchorRef.current = { id: anchorEl.id, top: anchorEl.getBoundingClientRect().top };
+    }
+    setIsLoadingMore(true);
+    Promise.resolve(onLoadMore()).finally(() => setIsLoadingMore(false));
+  }, [onLoadMore, isLoadingMore]);
+
+  // Reset the spinner if the conversation changes while a load is in flight.
+  useEffect(() => {
+    setIsLoadingMore(false);
+  }, [conversation.id]);
+
   const otherMembersCount = useMemo(
     () => conversation.members.filter((m) => m.id !== user?.id).length,
     [conversation.members, user?.id]
@@ -167,13 +230,29 @@ export function MessageArea({
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto max-md:overflow-x-hidden"
+      className="flex-1 overflow-y-auto overflow-x-hidden"
     >
-      <div className="flex flex-col gap-0.5 pt-4 pb-2 max-md:max-w-full">
+      <div className="flex flex-col gap-0.5 pt-4 pb-2 w-full min-w-0">
         {hasMore && onLoadMore && (
-          <div className="flex justify-center py-2">
-            <Button variant="ghost" size="sm" onClick={onLoadMore} className="text-xs text-muted-foreground">
-              Load older messages
+          <div className="flex justify-center py-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleLoadMore}
+              disabled={isLoadingMore}
+              className="h-8 gap-1.5 rounded-full border-border/60 bg-background px-4 text-xs font-medium text-muted-foreground shadow-sm hover:bg-muted hover:text-foreground disabled:opacity-70"
+            >
+              {isLoadingMore ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5" />
+                  Load older messages
+                </>
+              )}
             </Button>
           </div>
         )}
@@ -224,13 +303,24 @@ export function MessageArea({
             // instead of stacking each as its own full-width bubble.
             if (isImageMsg(msg)) {
               const run: ChatMessage[] = [msg];
+              // A captioned image is always the lead file of its own batch, so it
+              // can only ever be the *first* item of a run — comparing each
+              // candidate only to its immediate predecessor let an uncaptioned
+              // image join within the tight window, after which later messages
+              // could then chain onto *that* one under the loose window, drifting
+              // arbitrarily far from the original caption. Anchor the tight
+              // window to the run's captioned message (if any) instead.
+              const anchorHasCaption = hasRealCaption(msg);
               let j = i + 1;
               while (
                 j < filteredMessages.length &&
                 isImageMsg(filteredMessages[j]) &&
                 filteredMessages[j].senderId === msg.senderId &&
                 isSameDay(new Date(filteredMessages[j].createdAt), msgDate) &&
-                differenceInMinutes(new Date(filteredMessages[j].createdAt), new Date(filteredMessages[j - 1].createdAt)) < 2
+                !hasRealCaption(filteredMessages[j]) &&
+                (anchorHasCaption
+                  ? differenceInSeconds(new Date(filteredMessages[j].createdAt), msgDate) < SAME_BATCH_SECONDS
+                  : differenceInMinutes(new Date(filteredMessages[j].createdAt), new Date(filteredMessages[j - 1].createdAt)) < 2)
               ) {
                 run.push(filteredMessages[j]);
                 j += 1;

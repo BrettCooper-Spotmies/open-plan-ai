@@ -1,5 +1,7 @@
 // BOM types, API response types, adapters, and tree helpers
 
+import { parseNumericCell } from '@/lib/numericCell';
+
 export interface SupplierEntry {
   distributor: string;
   price: string;
@@ -24,6 +26,9 @@ export interface BOMRevision {
   status: BOMStatus;
   price: number;
   leadTime: number;   // days — mirrors backend leadTimeDays 1:1, no unit conversion
+  ecoId: string | null;
+  description: string | null;  // snapshot of the part's description at revision creation time
+  category: BOMCategory | null; // snapshot of the part's category at revision creation time
   suppliers: SupplierEntry[];
   customFields: CustomFieldEntry[];
 }
@@ -60,6 +65,7 @@ export interface BOMNode {
   createdById?: string;
   customFields: CustomFieldEntry[];
   revHistory: BOMRevision[];
+  available: number | null;  // sum of on-hand-allocated-quarantine across inventory locations; null = part not in inventory
   children?: BOMNode[];
   _x?: number;
   _y?: number;
@@ -67,15 +73,30 @@ export interface BOMNode {
   _reqLinks?: ApiReqLinkResponse[];  // raw requirement links (id + requirementId) — needed to remove a link by id
 }
 
+export type LeadTimeOp = 'any' | 'lt' | 'gt' | 'eq';
+export type LeadTimeUnit = 'days' | 'weeks' | 'months';
+
 export const EMPTY_FILTERS = {
-  priceMin: '', priceMax: '', leadMin: '', leadMax: '',
+  priceMin: '', priceMax: '',
+  leadOp: 'any' as LeadTimeOp,
+  leadValue: '',
+  leadUnit: 'days' as LeadTimeUnit,
   units: [] as string[], suppliers: [] as string[],
   manufacturers: [] as string[], statuses: [] as BOMStatus[],
+  categories: [] as string[],
   owners: [] as string[],
   bomType: 'all' as 'all' | 'top' | 'catalog',
   mpn: '',
 };
 export type BOMFilters = typeof EMPTY_FILTERS;
+
+// Converts a lead-time filter value in weeks/months to days — BOMNode.leadTime is
+// always stored in days, so comparisons need a common unit.
+export function leadTimeValueToDays(value: number, unit: LeadTimeUnit): number {
+  if (unit === 'weeks') return value * 7;
+  if (unit === 'months') return value * 30;
+  return value;
+}
 
 // ── Category metadata ─────────────────────────────────────────────
 export const BOM_CAT_META: Record<BOMCategory, { tint: string; label: string; iconName: string }> = {
@@ -123,6 +144,8 @@ export interface ApiRevisionResponse {
   price: string | null;
   leadTimeDays: number | null;
   ecoId: string | null;
+  description: string | null;
+  category: string | null;
   suppliers: Array<{ distributor: string; price: number; calcFromSubparts: boolean }> | null;
   customFields: ApiCustomFieldEntry[] | null;
   createdAt: string;
@@ -145,8 +168,10 @@ export interface ApiPartResponse {
   mpn: string | null;
   unit: string;
   notes: string | null;
+  imageUrl: string | null;
   customFields: ApiCustomFieldEntry[] | null;
   latestRevision: ApiRevisionResponse | null;
+  available: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -278,6 +303,25 @@ export interface ApiSummaryResponse {
 
 // ── Adapters: API response → BOMNode / BOMRevision ────────────────
 
+export function parseCustomFields(raw: unknown): CustomFieldEntry[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) {
+    return raw.filter(
+      (item): item is CustomFieldEntry =>
+        Boolean(item) && typeof item === 'object' && typeof (item as { label?: string }).label === 'string' && typeof (item as { value?: string }).value === 'string'
+    );
+  }
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parseCustomFields(parsed);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
 export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
   const rev = node.part.latestRevision;
   return {
@@ -305,8 +349,9 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     ownerId:      node.owner?.id,
     createdByName: node.creator?.name ?? '',
     createdById:   node.creator?.id,
-    customFields: Array.isArray(node.part.customFields) ? node.part.customFields : [],
+    customFields: parseCustomFields(node.part.customFields),
     revHistory:   [],  // loaded on demand via usePartRevisions
+    available:    node.part.available,
     children:     node.children?.map(c => fromApiNode(c, depth + 1)),
     _partId:      node.part.id,
   };
@@ -333,8 +378,11 @@ export function fromApiRevision(r: ApiRevisionResponse): BOMRevision {
     status:    r.status,
     price:     parseFloat(r.price ?? '0'),
     leadTime:  r.leadTimeDays ?? 0,
+    ecoId:     r.ecoId ?? null,
+    description: r.description ?? null,
+    category:  r.category ?? null,
     suppliers: r.suppliers?.map(s => ({ ...s, price: String(s.price) })) ?? [],
-    customFields: r.customFields ?? [],
+    customFields: parseCustomFields(r.customFields),
   };
 }
 
@@ -573,6 +621,21 @@ export function parseSubcomponentImportRows(
   rows: Record<string, unknown>[],
   existingParts: ApiPartResponse[],
 ): ParsedImportRow[] {
+  // Sheets get imported under a parent that already exists in the BOM (the dialog's
+  // target part), so users naturally treat that parent as an implicit "level 0" and
+  // number every direct sub-component 1, 2, 3… instead of restarting at 0. That's
+  // still a valid, flat/nested hierarchy — just uniformly shifted — so normalize by
+  // the lowest well-formed level actually present instead of requiring literal 0.
+  const parsedLevels = rows.map((row) => {
+    const levelRaw = pickField(row, colAliases('Level'));
+    if (levelRaw === '') return { valid: true, level: 0 };
+    const n = parseInt(levelRaw, 10);
+    const valid = Number.isInteger(n) && n >= 0 && String(n) === levelRaw.trim();
+    return { valid, level: valid ? n : 0 };
+  });
+  const validLevels = parsedLevels.filter(r => r.valid).map(r => r.level);
+  const levelOffset = validLevels.length > 0 ? Math.min(...validLevels) : 0;
+
   return rows.map((row, i) => {
     const errors: string[] = [];
 
@@ -583,7 +646,7 @@ export function parseSubcomponentImportRows(
       if (!Number.isInteger(n) || n < 0 || String(n) !== levelRaw.trim()) {
         errors.push('Level must be a non-negative integer');
       } else {
-        level = n;
+        level = n - levelOffset;
       }
     }
 
@@ -625,8 +688,11 @@ export function parseSubcomponentImportRows(
     if (!unitPriceRaw) {
       errors.push('Missing Unit Price');
     } else {
-      const n = Number(unitPriceRaw);
-      if (Number.isNaN(n)) errors.push('Unit Price must be a number');
+      // parseNumericCell, not Number(): sheets export prices as formatted text
+      // ("₹314.65", "1,234.56"), which Number() reads as NaN and this used to
+      // reject outright.
+      const n = parseNumericCell(unitPriceRaw);
+      if (n === null) errors.push('Unit Price must be a number');
       else unitPrice = n;
     }
 
@@ -643,8 +709,8 @@ export function parseSubcomponentImportRows(
     if (!quantityRaw) {
       errors.push('Missing Quantity');
     } else {
-      const n = Number(quantityRaw);
-      if (Number.isNaN(n) || n <= 0) errors.push('Quantity must be a positive number');
+      const n = parseNumericCell(quantityRaw);
+      if (n === null || n <= 0) errors.push('Quantity must be a positive number');
       else quantity = n;
     }
 
@@ -684,6 +750,51 @@ export function validateLevels(rows: ParsedImportRow[]): Map<number, string> {
     } else {
       maxReachedLevel = Math.max(maxReachedLevel, row.level);
     }
+  }
+  return issues;
+}
+
+/**
+ * Flags rows that would create a duplicate BOM node: a part number that's already
+ * present under the same target parent, either as one of that parent's *existing*
+ * children (re-importing a sheet after it was imported once already) or repeated
+ * more than once within the sheet itself under the same resolved parent. Reusing
+ * the same `bom_parts` catalog row (row.existingPart) is fine and intentional —
+ * this only guards against attaching it as a second sibling node.
+ * Only rows that already passed validateLevels are checked, since a level-chain
+ * error means the row's resolved parent can't be trusted.
+ */
+export function validateDuplicateParts(
+  rows: ParsedImportRow[],
+  levelIssues: Map<number, string>,
+  // Nodes that already sit where this import's level-0 rows would land — the
+  // target parent's existing children, or the BOM's existing top-level nodes
+  // when importing with no parent (see BOMImportSubcomponentsDialog).
+  existingSiblings: BOMNode[],
+): Map<number, string> {
+  const issues = new Map<number, string>();
+  const rootKey = '__root__';
+  // parentKeyStack[N] = the key of the parent that level-N rows attach to.
+  const parentKeyStack: string[] = [rootKey];
+  const seenByParent = new Map<string, Set<string>>([
+    [rootKey, new Set(existingSiblings.map(c => c.pn.trim().toLowerCase()))],
+  ]);
+
+  for (const row of rows) {
+    if (row.errors.length > 0 || levelIssues.has(row.rowNumber)) continue;
+    const parentKey = parentKeyStack[row.level] ?? rootKey;
+    const pnKey = row.partNumber.trim().toLowerCase();
+    const seen = seenByParent.get(parentKey) ?? new Set<string>();
+    if (pnKey && seen.has(pnKey)) {
+      issues.set(row.rowNumber, `${row.partNumber} already exists under this parent`);
+    } else if (pnKey) {
+      seen.add(pnKey);
+      seenByParent.set(parentKey, seen);
+    }
+    // This row becomes the parent for deeper rows — keyed by its own row number
+    // since it has no real id yet.
+    parentKeyStack[row.level + 1] = `row:${row.rowNumber}`;
+    parentKeyStack.length = row.level + 2;
   }
   return issues;
 }
