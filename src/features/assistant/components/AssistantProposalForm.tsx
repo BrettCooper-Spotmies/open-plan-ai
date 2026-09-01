@@ -12,6 +12,8 @@ import { useProjectDetail, useProjectModules } from '@/hooks/useProjectDetail';
 import type { ProposalFormState } from '../assistantData';
 import { BomFieldEditor } from './AssistantProposalBomFields';
 import { BOM_FIELD_KEYS, BOM_FIELD_ORDER, BOM_FIELD_LABELS } from '../bomProposalFields';
+import { EcoFieldEditor } from './AssistantProposalEcoFields';
+import { ECO_FIELD_KEYS, ECO_FIELD_ORDER, ECO_FIELD_LABELS } from '../ecoProposalFields';
 
 const TASK_STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do' },
@@ -76,6 +78,14 @@ function FieldEditor({ entityType, projectId, fieldKey, value, onChange }: Field
   // owner — deliberately fall through to the editors below.
   if (entityType === 'bom_node' && BOM_FIELD_KEYS.has(fieldKey)) {
     return <BomFieldEditor projectId={projectId} fieldKey={fieldKey} value={value} onChange={onChange} />;
+  }
+
+  // An ECO proposal's form is the whole 5-tab wizard — most of its keys need
+  // ECO-specific controls (a change-class picker, the effectivity type, the
+  // affected-parts / diff-rows / pipeline tables). title/description fall
+  // through; targetDate/ownerId reuse the shared editors below.
+  if (entityType === 'eco' && ECO_FIELD_KEYS.has(fieldKey)) {
+    return <EcoFieldEditor projectId={projectId} fieldKey={fieldKey} value={value} onChange={onChange} />;
   }
 
   switch (fieldKey) {
@@ -248,7 +258,8 @@ export function AssistantProposalForm({ entityType, projectId, formState, onSubm
   const [error, setError] = useState<string | null>(null);
 
   const setField = (key: string, value: unknown) => setValues((prev) => ({ ...prev, [key]: value }));
-  const labelFor = (key: string) => (entityType === 'bom_node' ? BOM_FIELD_LABELS[key] : undefined) ?? FIELD_LABELS[key] ?? key;
+  const labelFor = (key: string) =>
+    (entityType === 'bom_node' ? BOM_FIELD_LABELS[key] : entityType === 'eco' ? ECO_FIELD_LABELS[key] : undefined) ?? FIELD_LABELS[key] ?? key;
 
   const requiredMissing = formState.mode === 'single'
     ? formState.required.filter((key) => {
@@ -281,7 +292,7 @@ export function AssistantProposalForm({ entityType, projectId, formState, onSubm
   // A BOM form follows the part form's own tab order (details → sourcing →
   // traceability → documents), which shares only a few keys with the
   // task/issue/milestone/module order.
-  const order = entityType === 'bom_node' ? BOM_FIELD_ORDER : FIELD_ORDER;
+  const order = entityType === 'bom_node' ? BOM_FIELD_ORDER : entityType === 'eco' ? ECO_FIELD_ORDER : FIELD_ORDER;
   const fieldKeys = formState.mode === 'single'
     ? order.filter((key) => key in (formState.fields ?? {}))
     : [formState.sharedFields?.[0]?.field ?? ''];

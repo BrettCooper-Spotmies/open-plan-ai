@@ -672,7 +672,7 @@ export interface AssistantProposal {
   executedAt: string | null;
   /** Null = the review form hasn't been submitted yet — the card renders that form instead of Confirm/Dismiss. */
   reviewedAt: string | null;
-  /** Null when there's nothing to prefill a form from (e.g. BOM/ECO proposals, which don't have a review form yet) — the card always renders read-only in that case. */
+  /** Null when there's nothing to prefill a form from — a delete, or a BOM/ECO approval/lifecycle card — so the card always renders read-only (Confirm/Dismiss only) in that case. */
   formState: ProposalFormState | null;
   expiresAt: string;
   createdAt: string;
