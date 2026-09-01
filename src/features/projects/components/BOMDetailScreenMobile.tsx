@@ -248,8 +248,8 @@ function NotesSection({ nodeId, currentUserId }: { nodeId: string; currentUserId
             return (
               <div key={note.id} className="flex items-start gap-2.5 px-4 py-3">
                 <div className={cn(
-                  'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0 mt-0.5',
-                  isOwn ? 'bg-primary' : noteAvatarColor(note.author?.id ?? note.id),
+                  'w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5',
+                  isOwn ? 'bg-primary text-primary-foreground' : `text-white ${noteAvatarColor(note.author?.id ?? note.id)}`,
                 )}>
                   {initials}
                 </div>
