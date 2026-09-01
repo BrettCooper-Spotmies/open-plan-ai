@@ -542,7 +542,7 @@ export function BOMDetailScreenMobile({
                     </button>
                   )}
                   {hasOverflowItems && (
-                    <DropdownMenu>
+                    <DropdownMenu modal={false}>
                       <DropdownMenuTrigger asChild>
                         <button aria-label="More part actions"
                           className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center shrink-0 text-foreground active:bg-muted/70 transition-colors">
