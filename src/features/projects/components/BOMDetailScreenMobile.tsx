@@ -795,6 +795,9 @@ export function BOMDetailScreenMobile({
                   <span className="font-medium text-foreground">{activeRequest.requestedByName}</span> requested review of{' '}
                   {activeRequest.scope === 'subtree' ? 'this part + sub-components' : 'this part'} from{' '}
                   {activeRequest.approvers.map(a => a.name).join(', ')}.
+                  {activeRequest.comment && (
+                    <div className="mt-1 text-foreground/80 break-words">&ldquo;{activeRequest.comment}&rdquo;</div>
+                  )}
                 </div>
               )}
               {approvalsLoading ? (

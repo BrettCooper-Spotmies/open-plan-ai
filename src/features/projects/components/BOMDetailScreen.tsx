@@ -864,6 +864,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   <span
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap"
                     style={{ background: 'rgba(245,158,11,0.1)', color: '#D97706', border: '1px solid rgba(245,158,11,0.2)' }}
+                    title={activeRequest.comment ? `Note: ${activeRequest.comment}` : undefined}
                   >
                     Awaiting review by {activeRequest.approvers.map(a => a.name).join(', ')}
                   </span>
@@ -1259,6 +1260,9 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                       <span className="font-medium text-foreground">{activeRequest.requestedByName}</span> requested review of{' '}
                       {activeRequest.scope === 'subtree' ? 'this part + sub-components' : 'this part'} from{' '}
                       {activeRequest.approvers.map(a => a.name).join(', ')}.
+                      {activeRequest.comment && (
+                        <div className="mt-1 text-foreground/80 break-words">&ldquo;{activeRequest.comment}&rdquo;</div>
+                      )}
                     </div>
                   )}
                   {approvalsLoading ? (
