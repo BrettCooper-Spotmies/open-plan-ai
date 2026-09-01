@@ -86,11 +86,11 @@ export interface CommitImportResult {
   taskIds: string[];
 }
 
-const SUPPORTED_EXTENSIONS = ['.xlsx', '.xls', '.csv', '.docx', '.pdf', '.txt'];
+const SUPPORTED_EXTENSIONS = ['.xlsx', '.xls', '.csv', '.docx', '.pdf', '.txt', '.md'];
 
 export function isSupportedImportFile(file: File): boolean {
   const lower = file.name.toLowerCase();
   return SUPPORTED_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
-export const SUPPORTED_IMPORT_FILE_LABEL = 'Excel, CSV, Word, PDF, or text file';
+export const SUPPORTED_IMPORT_FILE_LABEL = 'Excel, CSV, Word, PDF, text, or Markdown file';

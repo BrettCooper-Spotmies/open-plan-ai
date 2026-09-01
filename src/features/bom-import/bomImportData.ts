@@ -87,13 +87,13 @@ export interface CommitImportResult {
   nodeIds: string[];
 }
 
-// BOM import is xlsx/csv only — no docx/pdf/txt path, since a BOM is
-// inherently tabular (see the backend's candidateBomPart.ts header comment).
-const SUPPORTED_EXTENSIONS = ['.xlsx', '.xls', '.csv'];
+// xlsx/csv go through the backend's structured column-mapping extractor;
+// docx/pdf/txt/md go through its AI prose extractor.
+const SUPPORTED_EXTENSIONS = ['.xlsx', '.xls', '.csv', '.docx', '.pdf', '.txt', '.md'];
 
 export function isSupportedImportFile(file: File): boolean {
   const lower = file.name.toLowerCase();
   return SUPPORTED_EXTENSIONS.some((ext) => lower.endsWith(ext));
 }
 
-export const SUPPORTED_IMPORT_FILE_LABEL = 'Excel or CSV file';
+export const SUPPORTED_IMPORT_FILE_LABEL = 'Excel, CSV, Word, PDF, text, or Markdown file';

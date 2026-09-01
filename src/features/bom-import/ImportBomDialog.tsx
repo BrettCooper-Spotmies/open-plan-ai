@@ -1,6 +1,7 @@
 /**
- * ImportBomDialog — upload an Excel/CSV file, watch the background AI job
- * parse and map it onto the BOM schema, then resolve any flagged rows in a
+ * ImportBomDialog — upload a file (Excel/CSV, or a Word/PDF/text/Markdown
+ * parts list), watch the background AI job parse and map it onto the BOM
+ * schema, then resolve any flagged rows in a
  * chat with the AI before committing. Mirrors
  * issue-import/ImportIssuesDialog.tsx. Additive: this is a new entry point
  * alongside the existing "Import from Excel" (client-side) and "Import from
@@ -53,8 +54,12 @@ function toFriendlyImportError(errorSummary: string | null | undefined): string 
     return 'We couldn’t find a Part Number column in this file. Try renaming a column to "Part Number" or "PN".';
   }
 
-  if (normalized.includes('does not appear to contain bill of materials') || normalized.includes('no parts could be found')) {
-    return 'This file doesn’t seem to contain BOM/parts data. Try a file that clearly lists part numbers, descriptions, and quantities.';
+  if (
+    normalized.includes('does not appear to contain bill of materials') ||
+    normalized.includes('no parts could be found') ||
+    normalized.includes("doesn't look like a parts list")
+  ) {
+    return 'This file doesn’t seem to contain BOM/parts data. Try a file that clearly lists parts — names, quantities, and ideally part numbers.';
   }
 
   if (normalized.includes('unsupported file type')) {
@@ -305,7 +310,7 @@ export function ImportBomDialog({ open, onClose, projectId, parentNodeId }: Prop
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".xlsx,.xls,.csv"
+                  accept=".xlsx,.xls,.csv,.docx,.pdf,.txt,.md"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -321,7 +326,7 @@ export function ImportBomDialog({ open, onClose, projectId, parentNodeId }: Prop
                 </div>
               )}
               <p className="text-xs text-muted-foreground text-center">
-                Works best with Part Number, Part Name, Description, Category, and Quantity columns. Use a Level column (0, 1, 2…) for multi-level hierarchies. Non-BOM files will be rejected automatically.
+                Works best with a spreadsheet of Part Number, Part Name, Description, Category, and Quantity columns (add a Level column — 0, 1, 2… — for multi-level hierarchies), but a Word, PDF, or Markdown parts list works too. Non-BOM files will be rejected automatically.
               </p>
             </div>
           )}
@@ -423,7 +428,7 @@ export function ImportBomDialog({ open, onClose, projectId, parentNodeId }: Prop
                 <input
                   ref={attachInputRef}
                   type="file"
-                  accept=".xlsx,.xls,.csv"
+                  accept=".xlsx,.xls,.csv,.docx,.pdf,.txt,.md"
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
