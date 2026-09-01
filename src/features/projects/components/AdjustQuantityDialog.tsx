@@ -135,7 +135,19 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   // from a BOM (never received) still needs to be selectable when starting a new transaction.
   const pickerParts = useMemo<PickerPart[]>(() => {
     const stockPartIds = new Set(stock.map(r => r.partId));
-    const fromStock: PickerPart[] = stock.map(r => ({ partId: r.partId, pn: r.pn, name: r.name, mpn: r.mpn, location: r.location, onHand: r.onHand, leadTimeDays: r.leadTimeDays, cat: r.cat, projects: partProjects?.get(r.partId) ?? [] }));
+    // A part stocked in several locations has one stock row per location. The picker
+    // chooses a *part*, not a stock row, so collapse them to one entry — otherwise the
+    // list carries duplicate partIds, which breaks the `key={r.partId}` list reconciliation
+    // (stale rows survive the search filter) and shows the same part multiple times.
+    // Keep the location holding the most on-hand as the representative row.
+    const byPart = new Map<string, PickerPart>();
+    for (const r of stock) {
+      const existing = byPart.get(r.partId);
+      if (!existing || r.onHand > existing.onHand) {
+        byPart.set(r.partId, { partId: r.partId, pn: r.pn, name: r.name, mpn: r.mpn, location: r.location, onHand: r.onHand, leadTimeDays: r.leadTimeDays, cat: r.cat, projects: partProjects?.get(r.partId) ?? [] });
+      }
+    }
+    const fromStock: PickerPart[] = Array.from(byPart.values());
     const fromPartsOnly: PickerPart[] = parts
       .filter(p => !stockPartIds.has(p.id))
       .map(p => ({ partId: p.id, pn: p.partNumber, name: p.name, mpn: p.mpn, location: '', onHand: 0, leadTimeDays: p.latestRevision?.leadTimeDays ?? 0, cat: p.category, projects: partProjects?.get(p.id) ?? [] }));
@@ -506,7 +518,11 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                                 onValueChange={setPartSearch}
                               />
                               <CommandList>
-                                <CommandEmpty>No parts found.</CommandEmpty>
+                                {filteredPickerParts.length === 0 && (
+                                  <div className="py-6 text-center text-sm text-muted-foreground">
+                                    No parts found.
+                                  </div>
+                                )}
                                 <CommandGroup>
                                   {filteredPickerParts.map((r) => (
                                     <CommandItem
