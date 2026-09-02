@@ -689,8 +689,12 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
       await createApprovalRequest.mutateAsync({ nodeId: originalNode.id, scope, approverIds, comment });
       toast.success(`${originalNode.pn} sent for review`);
     } catch (err) {
+      let description = err instanceof Error ? err.message : undefined;
+      if (description?.includes('at most 2000 character(s)')) {
+        description = 'Note text cannot exceed 2000 characters.';
+      }
       toast.error('Failed to send part for review', {
-        description: err instanceof Error ? err.message : undefined,
+        description,
       });
       throw err;
     }
