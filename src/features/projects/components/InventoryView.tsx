@@ -350,6 +350,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
       partId: input.partId,
       location: input.location,
       direction: input.direction,
+      mode: input.mode,
       quantity: input.quantity,
       reasonCode: input.reasonCode,
       note: input.note,

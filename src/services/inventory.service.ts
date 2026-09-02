@@ -245,6 +245,8 @@ export interface AdjustQuantityDto {
   partId: string;
   location: string;
   direction: 'add' | 'remove';
+  /** 'set' overwrites on-hand with `quantity`; 'delta' (default) adds/removes it per `direction`. */
+  mode?: 'delta' | 'set';
   quantity: number;
   reasonCode: string;
   note?: string;

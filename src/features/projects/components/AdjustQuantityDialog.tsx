@@ -69,7 +69,10 @@ const adjustSchema = z.object({
   stockStatus: z.enum(['in_stock', 'place_order']),
   orderStatus: z.enum(['planned', 'open']),
   direction: z.enum(['add', 'remove']),
-  quantity: z.coerce.number().int().min(1, 'Quantity must be at least 1'),
+  // 'set' — the row-level "Adjust quantity" flow: quantity is the absolute new on-hand
+  // count. 'delta' (default) — "New transaction": quantity is added per direction.
+  mode: z.enum(['delta', 'set']).default('delta'),
+  quantity: z.coerce.number().int().min(0, 'Quantity must be 0 or more'),
   reasonCode: z.string().optional(),
   expectedDate: z.string().optional(),
   leadTimeDays: z.coerce.number().int().min(1, 'Lead time must be at least 1 day'),
@@ -77,6 +80,11 @@ const adjustSchema = z.object({
   description: z.string().max(500, 'Description must be less than 500 characters').optional(),
   orderNote: z.string().max(500, 'Notes must be less than 500 characters').optional(),
   purpose: z.string().max(500, 'Purpose must be less than 500 characters').optional(),
+}).superRefine((data, ctx) => {
+  // A 'delta' adjustment of 0 is a no-op; a 'set' to 0 (counted, found none) is valid.
+  if (data.mode !== 'set' && data.quantity < 1) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['quantity'], message: 'Quantity must be at least 1' });
+  }
 });
 
 type AdjustFormData = z.infer<typeof adjustSchema>;
@@ -88,6 +96,8 @@ export interface AdjustQuantityInput {
   cat?: BOMCategory;
   location: StockLocation;
   direction: 'add' | 'remove';
+  /** 'set' overwrites on-hand with `quantity`; 'delta' adds `quantity` per `direction`. */
+  mode: 'delta' | 'set';
   quantity: number;
   reasonCode: string;
   note?: string;
@@ -212,6 +222,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       stockStatus: 'in_stock',
       orderStatus: 'open',
       direction: 'add',
+      mode: initialPartId ? 'set' : 'delta',
       quantity: 1,
       reasonCode: '',
       expectedDate: '',
@@ -250,6 +261,10 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         form.setValue('partId', match.partId, { shouldValidate: true });
         form.setValue('location', match.location, { shouldValidate: true });
         form.setValue('category', match.cat ?? '', { shouldValidate: true });
+        form.setValue('mode', 'set', { shouldValidate: true });
+        // Prefill with the current on-hand count so an unchanged submit is a no-op —
+        // the user edits it to whatever the true count is.
+        form.setValue('quantity', match.onHand, { shouldValidate: true });
       }
       return;
     }
@@ -453,6 +468,8 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         ...(selectedRecord ? {} : { pn: part.pn, name: part.name, cat }),
         location: location as StockLocation,
         direction: data.direction,
+        // Row-level "Adjust quantity" sets the absolute on-hand count; "New transaction" adds a delta.
+        mode: initialPartId ? 'set' : 'delta',
         quantity: data.quantity,
         reasonCode: data.reasonCode as string,
         note: data.note?.trim() || undefined,
@@ -495,7 +512,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
             <DialogDescription>
               {stockStatus === 'place_order'
                 ? (orderStatus === 'planned' ? 'Flags a future purchase need, not yet on order' : 'Creates a tracked purchase order')
-                : 'Writes one immutable ledger entry'}
+                : initialPartId
+                  ? 'Sets the on-hand count — logs the change as one ledger entry'
+                  : 'Writes one immutable ledger entry'}
             </DialogDescription>
           </div>
           <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none">
@@ -834,15 +853,17 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         name="quantity"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quantity <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                              {initialPartId ? 'New on-hand count' : 'Quantity'} <span className="text-destructive" aria-hidden="true">*</span>
+                            </FormLabel>
                             <FormControl>
-                              <Input type="number" min={1} {...field} />
+                              <Input type="number" min={initialPartId ? 0 : 1} {...field} />
                             </FormControl>
-                            {!initialPartId && (
-                              <p className="text-xs text-muted-foreground">
-                                Defaults to this part&apos;s outstanding BOM demand — adjust it for this transaction.
-                              </p>
-                            )}
+                            <p className="text-xs text-muted-foreground">
+                              {initialPartId
+                                ? "The corrected on-hand quantity for this location — this replaces the current count, it isn't added to it."
+                                : "Defaults to this part's outstanding BOM demand — adjust it for this transaction."}
+                            </p>
                             <FormMessage />
                           </FormItem>
                         )}

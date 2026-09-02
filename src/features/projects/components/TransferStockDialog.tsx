@@ -118,11 +118,10 @@ export function TransferStockDialog({ isOpen, onClose, orgId, record, onTransfer
                 <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
                   {available > 0 ? (
                     <>
-                      Moves <span className="font-medium text-foreground">all {available} available unit{available === 1 ? '' : 's'}</span> from{' '}
-                      <span className="font-medium text-foreground">{record.location}</span> to the destination below.
-                      {(record.allocated > 0 || (record.quarantineQty ?? 0) > 0) && (
-                        <> Allocated and quarantined units stay put.</>
-                      )}
+                      Relocates this part from <span className="font-medium text-foreground">{record.location}</span> to the
+                      destination below. Its <span className="font-medium text-foreground">whole stock row</span> moves —
+                      on&#8209;hand{(record.allocated > 0 || (record.quarantineQty ?? 0) > 0) && <>, allocated and quarantined</>}{' '}
+                      units all travel with it, and the part keeps a single stock location.
                     </>
                   ) : (
                     <>No available stock at <span className="font-medium text-foreground">{record.location}</span> to transfer.</>
