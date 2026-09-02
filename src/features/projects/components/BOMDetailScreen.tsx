@@ -518,6 +518,10 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const canDecide = isAssignedApprover || isAdmin;
   const lastRequest = approvalRequests[0];
   const showRejectionBanner = !activeRequest && lastRequest?.status === 'rejected';
+  // Once a request is decided it drops out of `activeRequest` (pending-only) — fall
+  // back to the most recent request so its "requested review ... {comment}" note
+  // keeps showing in Approval History instead of disappearing after the decision.
+  const requestNote = activeRequest ?? lastRequest;
 
   // Point to latest revision whenever the node changes or revisions first load
   useEffect(() => {
@@ -1248,18 +1252,18 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     ) : (
                       <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
                         <ShieldCheck className="w-3.5 h-3.5" />
-                        {approvals.length + (activeRequest ? 1 : 0)} action{approvals.length + (activeRequest ? 1 : 0) !== 1 ? 's' : ''}
+                        {approvals.length + (requestNote ? 1 : 0)} action{approvals.length + (requestNote ? 1 : 0) !== 1 ? 's' : ''}
                       </div>
                     )
                   }
                 >
-                  {activeRequest && (
+                  {requestNote && (
                     <div className="mb-3 px-2.5 py-2 rounded-md bg-muted/50 border border-border text-[11.5px] text-muted-foreground">
-                      <span className="font-medium text-foreground">{activeRequest.requestedByName}</span> requested review of{' '}
-                      {activeRequest.scope === 'subtree' ? 'this part + sub-components' : 'this part'} from{' '}
-                      {activeRequest.approvers.map(a => a.name).join(', ')}.
-                      {activeRequest.comment && (
-                        <div className="mt-1 text-foreground/80 break-words">&ldquo;{activeRequest.comment}&rdquo;</div>
+                      <span className="font-medium text-foreground">{requestNote.requestedByName}</span> requested review of{' '}
+                      {requestNote.scope === 'subtree' ? 'this part + sub-components' : 'this part'} from{' '}
+                      {requestNote.approvers.map(a => a.name).join(', ')}.
+                      {requestNote.comment && (
+                        <div className="mt-1 text-foreground/80 break-words">&ldquo;{requestNote.comment}&rdquo;</div>
                       )}
                     </div>
                   )}
@@ -1280,7 +1284,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                       ))}
                     </div>
                   ) : approvals.length === 0 ? (
-                    !activeRequest && <p className="text-sm text-muted-foreground">No approval activity yet.</p>
+                    !requestNote && <p className="text-sm text-muted-foreground">No approval activity yet.</p>
                   ) : (
                     <div className="flex flex-col gap-0">
                       {approvals.map((a, i) => {
