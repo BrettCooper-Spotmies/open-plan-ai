@@ -67,6 +67,7 @@ export interface BOMNode {
   customFields: CustomFieldEntry[];
   revHistory: BOMRevision[];
   available: number | null;  // sum of on-hand-allocated-quarantine across inventory locations; null = part not in inventory
+  location: string | null;   // inventory stock location(s) for this part; null = part not in inventory
   children?: BOMNode[];
   _x?: number;
   _y?: number;
@@ -173,6 +174,7 @@ export interface ApiPartResponse {
   customFields: ApiCustomFieldEntry[] | null;
   latestRevision: ApiRevisionResponse | null;
   available: number | null;
+  inventoryLocation: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -354,6 +356,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     customFields: parseCustomFields(node.part.customFields),
     revHistory:   [],  // loaded on demand via usePartRevisions
     available:    node.part.available,
+    location:     node.part.inventoryLocation ?? null,
     children:     node.children?.map(c => fromApiNode(c, depth + 1)),
     _partId:      node.part.id,
   };
