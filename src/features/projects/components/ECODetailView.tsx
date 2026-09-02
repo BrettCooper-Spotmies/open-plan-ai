@@ -412,7 +412,7 @@ function ApprovalPipeline({
             onChange={e => { setComment(e.target.value); if (err) setErr(false); }}
             placeholder="Add a decision comment… (required to reject)"
             className={cn(
-              'w-full bg-muted/40 border rounded-md text-foreground text-[13px] px-3 py-2.5 outline-none resize-none h-12 font-[inherit]',
+              'w-full bg-muted/40 border rounded-md text-foreground text-[13px] px-3 py-2.5 outline-none resize-none h-28 font-[inherit]',
               err ? 'border-red-500/60' : 'border-border focus:border-primary/40',
             )}
           />
