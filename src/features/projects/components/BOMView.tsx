@@ -355,7 +355,7 @@ function StatCardSkeleton() {
 
 function ListRowSkeleton({ level = 0 }: { level?: number }) {
   return (
-    <div className="flex items-center px-6 border-b border-border" style={{ minWidth: 1440, height: 46 }}>
+    <div className="flex items-center px-6 border-b border-border" style={{ minWidth: 1270, height: 46 }}>
       <div style={{ flexBasis: 74, flexShrink: 0 }} className="flex items-center">
         <Skeleton className="h-3 w-6" style={{ marginLeft: level * 16 }} />
       </div>
@@ -379,7 +379,7 @@ function ListRowSkeleton({ level = 0 }: { level?: number }) {
         <Skeleton className="w-5 h-5 rounded-full shrink-0" />
         <Skeleton className="h-3 w-20" />
       </div>
-      <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2"><Skeleton className="h-5 w-16 rounded-full" /></div>
+      {/* Supplier — hidden to save horizontal space */}
       <div style={{ flexBasis: 110, flexShrink: 0 }} />
     </div>
   );
@@ -437,7 +437,7 @@ function BOMViewSkeleton() {
       {/* Table skeleton — desktop/tablet only */}
       <div className="hidden md:flex md:flex-col md:flex-1 overflow-hidden">
         {/* Table header — real so column names are visible */}
-        <div className="flex items-center px-6 border-b border-t border-border bg-muted/40" style={{ minWidth: 1440 }}>
+        <div className="flex items-center px-6 border-b border-t border-border bg-muted/40" style={{ minWidth: 1270 }}>
           {HEADERS.map((c, i) => (
             <div key={c.key}
               style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
@@ -448,7 +448,7 @@ function BOMViewSkeleton() {
             </div>
           ))}
         </div>
-        <div className="flex-1 overflow-hidden border-t-0" style={{ minWidth: 1440 }}>
+        <div className="flex-1 overflow-hidden border-t-0" style={{ minWidth: 1270 }}>
           {SKELETON_LEVELS.map((level, i) => <ListRowSkeleton key={i} level={level} />)}
         </div>
       </div>
@@ -823,7 +823,7 @@ const HEADERS = [
   { key: 'rev', label: 'Rev', w: 50 },
   { key: 'status', label: 'Status', w: 92 },
   { key: 'owner', label: 'Owner', w: 140 },
-  { key: 'supplier', label: 'Supplier', w: 170 },
+  // { key: 'supplier', label: 'Supplier', w: 170 },  // hidden to save horizontal space
   { key: 'act', label: 'Action', w: 110 },
 ] as const;
 
@@ -851,7 +851,7 @@ function ListView({
   return (
     <div className="hidden md:block flex-1 overflow-y-auto overflow-x-auto border-t border-border">
       {/* Header */}
-      <div className="flex items-center px-6 border-b border-border bg-background sticky top-0 z-10" style={{ minWidth: 1440 }}>
+      <div className="flex items-center px-6 border-b border-border bg-background sticky top-0 z-10" style={{ minWidth: 1270 }}>
         {HEADERS.map((c, i) => (
           <div key={c.key}
             style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
@@ -865,7 +865,7 @@ function ListView({
       </div>
 
       {/* Rows */}
-      <div style={{ minWidth: 1440 }}>
+      <div style={{ minWidth: 1270 }}>
         {rows.length === 0 ? (
           <div className="py-12 text-center text-muted-foreground">
             <Search className="w-7 h-7 mx-auto mb-3 opacity-30" />
@@ -958,10 +958,11 @@ function ListView({
               <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2 min-w-0 overflow-hidden">
                 <OwnerBadge name={row.owner} />
               </div>
-              {/* Supplier */}
+              {/* Supplier — hidden to save horizontal space
               <div style={{ flexBasis: 170, flexShrink: 0 }} className="px-2 text-xs text-muted-foreground truncate">
                 {row.distributor || <span className="text-[11px]">—</span>}
               </div>
+              */}
               {/* Actions */}
               <div style={{ flexBasis: 110, flexShrink: 0 }} className={cn('flex items-center justify-end gap-1 transition-opacity', isHovered ? 'opacity-100' : 'opacity-0')}>
                 {row.status === 'pending' && canDecideRow(row.id) && (
@@ -1007,7 +1008,7 @@ function ListView({
 
       {/* Footer */}
       {rows.length > 0 && (
-        <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground" style={{ minWidth: 1440 }}>
+        <div className="px-6 py-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground" style={{ minWidth: 1270 }}>
           <span>Showing {rows.length} of {totalCount} total parts</span>
           <span>Last updated 23-Apr-2026 · Rev C approved by Engineering</span>
         </div>
