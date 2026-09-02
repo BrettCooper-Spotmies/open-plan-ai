@@ -250,7 +250,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         form.setValue('partId', match.partId, { shouldValidate: true });
         form.setValue('location', match.location, { shouldValidate: true });
         form.setValue('category', match.cat ?? '', { shouldValidate: true });
-        form.setValue('leadTimeDays', match.leadTimeDays > 0 ? match.leadTimeDays : 1, { shouldValidate: true });
       }
       return;
     }
@@ -458,8 +457,10 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         reasonCode: data.reasonCode as string,
         note: data.note?.trim() || undefined,
         description: data.description?.trim() || undefined,
-        image: image ?? undefined,
-        leadTimeDays: data.leadTimeDays,
+        // Lead time and image are only collected in the "New transaction" flow —
+        // the row-level "Adjust quantity" dialog omits both fields.
+        image: initialPartId ? undefined : image ?? undefined,
+        leadTimeDays: initialPartId ? undefined : data.leadTimeDays,
       });
     }
     resetAndClose();
@@ -848,6 +849,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                       />
                     </div>
 
+                    {!initialPartId && (
                     <div className="grid grid-cols-1 gap-4">
                       <FormField
                         control={form.control}
@@ -866,6 +868,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         )}
                       />
                     </div>
+                    )}
                   </>
                 ) : (
                   <>
@@ -1009,6 +1012,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                 />
                 )}
 
+                {!initialPartId && (
                 <div className="space-y-2">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Image <span className="normal-case font-normal">optional</span>
@@ -1084,6 +1088,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     </div>
                   )}
                 </div>
+                )}
               </div>
             </div>
 
