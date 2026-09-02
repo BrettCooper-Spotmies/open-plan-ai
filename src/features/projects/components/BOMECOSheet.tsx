@@ -216,8 +216,13 @@ export function BOMECOSheet({
     ecoTitle.trim().length > 0 &&
     partName.trim().length > 0 &&
     revTo.trim().length > 0 &&
-    qty.trim().length > 0 &&
-    !isNaN(Number(qty)) && Number(qty) > 0 &&
+    desc.trim().length > 0 &&
+    manufacturer.trim().length > 0 &&
+    mpn.trim().length > 0 &&
+    distributor.trim().length > 0 &&
+    price.trim().length > 0 && !isNaN(Number(price)) && Number(price) >= 0 &&
+    leadTime.trim().length > 0 && !isNaN(Number(leadTime)) && Number(leadTime) >= 0 &&
+    qty.trim().length > 0 && !isNaN(Number(qty)) && Number(qty) > 0 &&
     changedFields.length >= 1 &&
     pipeline.length >= 1 &&
     pipelineValid;
@@ -228,10 +233,13 @@ export function BOMECOSheet({
         ecoTitle.trim().length > 0 &&
         partName.trim().length > 0 &&
         revTo.trim().length > 0 &&
-        qty.trim().length > 0 &&
-        !isNaN(Number(qty)) && Number(qty) > 0 &&
-        (price.trim() === '' || (!isNaN(Number(price)) && Number(price) >= 0)) &&
-        (leadTime.trim() === '' || (!isNaN(Number(leadTime)) && Number(leadTime) >= 0)) &&
+        desc.trim().length > 0 &&
+        manufacturer.trim().length > 0 &&
+        mpn.trim().length > 0 &&
+        distributor.trim().length > 0 &&
+        price.trim().length > 0 && !isNaN(Number(price)) && Number(price) >= 0 &&
+        leadTime.trim().length > 0 && !isNaN(Number(leadTime)) && Number(leadTime) >= 0 &&
+        qty.trim().length > 0 && !isNaN(Number(qty)) && Number(qty) > 0 &&
         changedFields.length >= 1
       );
     }
@@ -246,8 +254,9 @@ export function BOMECOSheet({
     }
     return true;
   }, [
-    activeTab, ecoTitle, partName, revTo, qty, price, leadTime, changedFields,
-    impactArea, impactAreaOther, changeType, changeTypeOther, reasonCode, reasonCodeOther,
+    activeTab, ecoTitle, partName, revTo, desc, manufacturer, mpn, distributor,
+    price, leadTime, qty, changedFields, impactArea, impactAreaOther,
+    changeType, changeTypeOther, reasonCode, reasonCodeOther,
   ]);
 
   const validateTab = (tab: TabId): boolean => {
@@ -256,14 +265,18 @@ export function BOMECOSheet({
       if (!ecoTitle.trim()) e.title = 'ECO title is required';
       if (!partName.trim()) e.name = 'Part Name is required';
       if (!revTo.trim()) e.revTo = 'Rev To is required';
+      if (!desc.trim()) e.desc = 'Description is required';
+      if (!manufacturer.trim()) e.manufacturer = 'Manufacturer is required';
+      if (!mpn.trim()) e.mpn = 'Manufacturer PN (MPN) is required';
+      if (!distributor.trim()) e.distributor = 'Supplier / Distributor is required';
+      if (!price.trim() || isNaN(Number(price)) || Number(price) < 0) {
+        e.price = 'Unit Price is required and must be 0 or greater';
+      }
+      if (!leadTime.trim() || isNaN(Number(leadTime)) || Number(leadTime) < 0) {
+        e.leadTime = 'Lead Time is required and must be 0 or greater';
+      }
       if (!qty.trim() || isNaN(Number(qty)) || Number(qty) <= 0) {
         e.qty = 'Quantity is required and must be a positive number';
-      }
-      if (price.trim() !== '' && (isNaN(Number(price)) || Number(price) < 0)) {
-        e.price = 'Unit Price must be 0 or greater';
-      }
-      if (leadTime.trim() !== '' && (isNaN(Number(leadTime)) || Number(leadTime) < 0)) {
-        e.leadTime = 'Lead Time must be 0 or greater';
       }
       if (changedFields.length === 0) e.changes = 'Change at least one BOM field to proceed';
     }
@@ -483,42 +496,48 @@ export function BOMECOSheet({
                     {errors.name && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.name}</p>}
                   </FL>
 
-                  {/* Description */}
-                  <FL label="Description">
+                  {/* Description (Mandatory) */}
+                  <FL label="Description" required>
                     <Textarea
                       value={desc}
-                      onChange={e => setDesc(e.target.value)}
+                      onChange={e => { setDesc(e.target.value); if (errors.desc) setErrors(({ desc: _d, ...rest }) => rest); }}
                       placeholder="Brief technical description of the part"
-                      className="text-sm bg-muted border-border resize-none"
+                      className={cn('text-sm bg-muted border-border resize-none', errors.desc && 'border-destructive')}
                       rows={3}
                     />
+                    {errors.desc && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.desc}</p>}
                   </FL>
 
                   {/* Sourcing grid */}
                   <div className="grid grid-cols-3 gap-x-5 gap-y-4">
-                    <FL label="Manufacturer" className="col-span-3">
+                    <FL label="Manufacturer" required className="col-span-3">
                       <FInput
                         value={manufacturer}
-                        onChange={e => setManufacturer(e.target.value)}
+                        onChange={e => { setManufacturer(e.target.value); if (errors.manufacturer) setErrors(({ manufacturer: _m, ...rest }) => rest); }}
                         placeholder="e.g. Texas Instruments"
+                        className={cn(errors.manufacturer && 'border-destructive')}
                       />
+                      {errors.manufacturer && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.manufacturer}</p>}
                     </FL>
-                    <FL label="Manufacturer PN (MPN)">
+                    <FL label="Manufacturer PN (MPN)" required>
                       <FInput
                         value={mpn}
-                        onChange={e => setMpn(e.target.value)}
+                        onChange={e => { setMpn(e.target.value); if (errors.mpn) setErrors(({ mpn: _mpn, ...rest }) => rest); }}
                         placeholder="e.g. TI-A4B2"
-                        className="font-mono"
+                        className={cn('font-mono', errors.mpn && 'border-destructive')}
                       />
+                      {errors.mpn && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.mpn}</p>}
                     </FL>
-                    <FL label="Supplier / Distributor">
+                    <FL label="Supplier / Distributor" required>
                       <FInput
                         value={distributor}
-                        onChange={e => setDistributor(e.target.value)}
+                        onChange={e => { setDistributor(e.target.value); if (errors.distributor) setErrors(({ distributor: _dist, ...rest }) => rest); }}
                         placeholder="e.g. Digi-Key"
+                        className={cn(errors.distributor && 'border-destructive')}
                       />
+                      {errors.distributor && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.distributor}</p>}
                     </FL>
-                    <FL label="Unit Price ($)">
+                    <FL label="Unit Price ($)" required>
                       <FInput
                         value={price}
                         onChange={e => { setPrice(e.target.value); if (errors.price) setErrors(({ price: _p, ...rest }) => rest); }}
@@ -529,7 +548,7 @@ export function BOMECOSheet({
                       />
                       {errors.price && <p className="text-[11px] text-destructive flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3" />{errors.price}</p>}
                     </FL>
-                    <FL label="Lead Time (days)">
+                    <FL label="Lead Time (days)" required>
                       <FInput
                         value={leadTime}
                         onChange={e => { setLeadTime(e.target.value); if (errors.leadTime) setErrors(({ leadTime: _l, ...rest }) => rest); }}
