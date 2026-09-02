@@ -346,6 +346,10 @@ function ApprovalPipeline({
                           ? 'On hold'
                           : s.date}
                 </div>
+                {/* Decision note */}
+                {(s.decision === 'APPROVED' || s.decision === 'REJECTED') && s.note && (
+                  <div className="text-[11px] text-muted-foreground mt-1 leading-snug">{s.note}</div>
+                )}
                 {/* Optional badge */}
                 {s.optional && (
                   <div className="mt-2 pt-2 border-t border-dashed border-border/50">
