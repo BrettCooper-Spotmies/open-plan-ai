@@ -740,7 +740,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   render={({ field }) => (
                     <FormItem className="sm:col-span-2">
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Description <span className="normal-case font-normal">optional</span>
+                        Description
                       </FormLabel>
                       <FormControl>
                         <Textarea
@@ -765,9 +765,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         <FormControl>
                           <CategoryCombobox value={field.value} onChange={field.onChange} placeholder="Select a part first..." extraCategories={extraCategories} />
                         </FormControl>
-                        <p className="text-xs text-muted-foreground">
-                          Defaults to the part&apos;s category — change it here to recategorize the part.
-                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -890,11 +887,11 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                             <FormControl>
                               <Input type="number" min={initialPartId ? 0 : 1} {...field} />
                             </FormControl>
-                            <p className="text-xs text-muted-foreground">
-                              {initialPartId
-                                ? "The corrected on-hand quantity for this location — this replaces the current count, it isn't added to it."
-                                : "Defaults to this part's outstanding BOM demand — adjust it for this transaction."}
-                            </p>
+                            {initialPartId && (
+                              <p className="text-xs text-muted-foreground">
+                                The corrected on-hand quantity for this location — this replaces the current count, it isn&apos;t added to it.
+                              </p>
+                            )}
                             <FormMessage />
                           </FormItem>
                         )}
@@ -912,9 +909,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                             <FormControl>
                               <Input type="number" min={0} step={1} placeholder="Days" {...field} />
                             </FormControl>
-                            <p className="text-xs text-muted-foreground">
-                              Defaults to the part&apos;s lead time — override it for this transaction.
-                            </p>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -934,9 +928,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                             <FormControl>
                               <Input type="number" min={1} {...field} />
                             </FormControl>
-                            <p className="text-xs text-muted-foreground">
-                              Defaults to this part&apos;s outstanding BOM demand.
-                            </p>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -947,7 +938,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         name="expectedDate"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Expected date <span className="normal-case font-normal">optional</span></FormLabel>
+                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Expected date</FormLabel>
                             <FormControl>
                               <Input type="date" {...field} />
                             </FormControl>
@@ -967,9 +958,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                             <FormControl>
                               <Input type="number" min={0} step={1} placeholder="Days" {...field} />
                             </FormControl>
-                            <p className="text-xs text-muted-foreground">
-                              Defaults to the part&apos;s lead time — override it for this order.
-                            </p>
                             <FormMessage />
                           </FormItem>
                         )}
@@ -984,7 +972,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   render={({ field }) => (
                     <FormItem className="sm:col-span-2">
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        {stockStatus === 'place_order' ? 'Supplier / PO ref' : 'Note'} <span className="normal-case font-normal">optional</span>
+                        {stockStatus === 'place_order' ? 'Supplier / PO ref' : 'Note'}
                       </FormLabel>
                       <FormControl>
                         <Textarea
@@ -1005,7 +993,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2">
                         <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          Purpose <span className="normal-case font-normal">optional</span>
+                          Purpose
                         </FormLabel>
                         <FormControl>
                           <Textarea
@@ -1027,7 +1015,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2">
                         <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          Notes <span className="normal-case font-normal">optional</span>
+                          Notes
                         </FormLabel>
                         <FormControl>
                           <Textarea
@@ -1045,7 +1033,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                 {!initialPartId && (
                 <div className="space-y-2 sm:col-span-2">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Image <span className="normal-case font-normal">optional</span>
+                    Image
                   </Label>
                   {cameraStream ? (
                     <div className="space-y-2">
