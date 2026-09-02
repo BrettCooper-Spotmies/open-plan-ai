@@ -31,7 +31,7 @@ import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useAuth } from '@/contexts/AuthContext';
 import { BOMSendForReviewModal } from './BOMSendForReviewModal';
 import { BOMApprovalReviewCard } from './BOMApprovalReviewCard';
-import { uploadBomDocumentFile, addBomDocumentLink, deleteBomDocument, useBomDocuments, isImageAttachment, type BomAttachment } from '@/hooks/useBomDocuments';
+import { uploadBomDocumentFile, addBomDocumentLink, deleteBomDocument, type BomAttachment } from '@/hooks/useBomDocuments';
 import { useCurrency } from '@/hooks/useCurrency';
 import { resolveFileUrl } from '@/utils/fileUrl';
 import { useBomNotes, useAddBomNote, useUpdateBomNote, useDeleteBomNote } from '@/hooks/useBomNotes';
@@ -479,12 +479,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
   const { data: apiRelatedEcos, isLoading: relatedEcosLoading } = useEcosByPart(projectId, originalNode._partId);
   const relatedEcos = useMemo(() => (apiRelatedEcos ?? []).map(fromApiEcoByPart), [apiRelatedEcos]);
 
-  // ── Uploaded documents — pull the product photo (first image attachment) ──
-  const { data: nodeDocs } = useBomDocuments(originalNode.id);
-  const photoUrl = useMemo(() => {
-    const photo = (nodeDocs ?? []).find(isImageAttachment);
-    return photo ? resolveFileUrl(photo.fileUrl) : null;
-  }, [nodeDocs]);
+  // ── Product photo — only the explicitly-set part image, never a Documents-tab fallback ──
+  const photoUrl = useMemo(() => resolveFileUrl(originalNode.imageUrl), [originalNode.imageUrl]);
 
   // ── Revision history from API ──
   const { data: apiRevisions, isLoading: revisionsLoading } = usePartRevisions(originalNode._partId);
@@ -1049,7 +1045,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                           className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-muted/50 transition-colors"
                           style={{ borderBottom: i < children.length - 1 ? '1px solid var(--border)' : undefined }}
                         >
-                          <PartImageThumb nodeId={c.id} cat={c.cat} size={34} />
+                          <PartImageThumb imageUrl={c.imageUrl} cat={c.cat} size={34} />
                           <div className="flex-1 min-w-0">
                             <Tooltip>
                               <TooltipTrigger asChild>

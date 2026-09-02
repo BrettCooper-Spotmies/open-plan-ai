@@ -595,8 +595,12 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
   useEffect(() => {
     if (!open || !isEdit || !node?.id || docsLoading || docsPopulated) return;
 
+    // The product photo is whichever attachment backs the part's explicitly-set imageUrl —
+    // not just any image the user happened to upload as a plain document.
     let photoValue: DocValue | null = null;
-    const photoDoc = existingDocs.find(isImageAttachment);
+    const photoDoc = node.imageUrl
+      ? existingDocs.find(d => isImageAttachment(d) && d.fileUrl === node.imageUrl)
+      : undefined;
     if (photoDoc) {
       const url = resolveFileUrl(photoDoc.fileUrl);
       if (url) {
@@ -606,7 +610,7 @@ export function BOMPartSheet({ mode, node, projectId, orgId, open, onClose, onSa
     }
 
     let sectionsValue = DEFAULT_TECH_SECTIONS.map(s => ({ ...s, value: [] as DocValue[] }));
-    const nonImageDocs = existingDocs.filter(d => !isImageAttachment(d));
+    const nonImageDocs = existingDocs.filter(d => d.id !== photoDoc?.id);
     if (nonImageDocs.length > 0) {
       const updated = sectionsValue.map(s => ({ ...s, value: [] as DocValue[] }));
       const orphans: DocValue[] = [];

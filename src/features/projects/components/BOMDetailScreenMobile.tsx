@@ -651,7 +651,7 @@ export function BOMDetailScreenMobile({
               {children.map(c => (
                 <button key={c.id} onClick={() => onNavigate(c.id)}
                   className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-muted/40 transition-colors">
-                  <PartImageThumb nodeId={c.id} cat={c.cat} size={42} radius={11} />
+                  <PartImageThumb imageUrl={c.imageUrl} cat={c.cat} size={42} radius={11} />
                   <div className="flex-1 min-w-0">
                     <div className="text-[11px] font-mono font-semibold text-primary">{c.pn}</div>
                     <div className="text-sm font-medium text-foreground truncate">{c.name || c.desc}</div>

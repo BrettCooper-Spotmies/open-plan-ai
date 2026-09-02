@@ -58,6 +58,7 @@ export interface BOMNode {
   price: number;
   leadTime: number;   // days — mirrors backend leadTimeDays 1:1, no unit conversion
   mpn: string;
+  imageUrl: string | null;  // explicitly-set product photo — mirrors backend parts.imageUrl 1:1; never a Documents-tab fallback
   suppliers: SupplierEntry[];
   owner: string;
   ownerId?: string;
@@ -344,6 +345,7 @@ export function fromApiNode(node: ApiNodeResponse, depth = 0): BOMNode {
     price:        parseFloat(rev?.price ?? '0'),
     leadTime:     rev?.leadTimeDays ?? 0,
     mpn:          node.part.mpn ?? '',
+    imageUrl:     node.part.imageUrl ?? null,
     suppliers:    rev?.suppliers?.map(s => ({ ...s, price: String(s.price) })) ?? [],
     owner:        node.owner?.name ?? '',
     ownerId:      node.owner?.id,

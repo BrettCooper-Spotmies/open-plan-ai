@@ -906,7 +906,7 @@ function ListView({
 
               {/* Part */}
               <div className="flex-1 min-w-0 px-2 flex items-center gap-2.5">
-                <PartImageThumb nodeId={row.id} cat={row.cat} size={32} hoverZoom />
+                <PartImageThumb imageUrl={row.imageUrl} cat={row.cat} size={32} hoverZoom />
                 <div className="flex-1 min-w-0">
                   <span className={cn('text-sm block truncate',
                     row.level === 0 ? 'font-semibold text-foreground' : row.level === 1 ? 'font-medium text-foreground' : 'text-muted-foreground'
@@ -1077,7 +1077,7 @@ function MobileListView({
                   ) : null}
                 </span>
 
-                <PartImageThumb nodeId={row.id} cat={row.cat} size={44} radius={12} />
+                <PartImageThumb imageUrl={row.imageUrl} cat={row.cat} size={44} radius={12} />
 
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] font-bold text-primary truncate leading-tight">{row.pn}</div>
@@ -1185,7 +1185,7 @@ function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCu
                 >
                   {/* Thumbnail */}
                   <div className="relative p-2.5">
-                    <PartImageThumb nodeId={row.id} cat={row.cat} big />
+                    <PartImageThumb imageUrl={row.imageUrl} cat={row.cat} big />
                     <span className="absolute top-4 left-4 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-card/90"
                       style={{ backdropFilter: 'blur(4px)', color: meta.tint, border: `1px solid ${meta.tint}40` }}>
                       {row.levelLabel ?? `L${row.level}`}
