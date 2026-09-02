@@ -370,7 +370,7 @@ function ListRowSkeleton({ level = 0 }: { level?: number }) {
       <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-8" /></div>
       <div style={{ flexBasis: 140, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-20" /></div>
       <div style={{ flexBasis: 120, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-14" /></div>
-      <div style={{ flexBasis: 120, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-16" /></div>
+      <div style={{ flexBasis: 120, flexShrink: 0 }} className="px-2 flex justify-center"><Skeleton className="h-3 w-16" /></div>
       <div style={{ flexBasis: 90, flexShrink: 0 }} className="px-2 flex justify-end"><Skeleton className="h-3.5 w-14" /></div>
       <div style={{ flexBasis: 74, flexShrink: 0 }} className="px-2"><Skeleton className="h-3 w-10" /></div>
       <div style={{ flexBasis: 50, flexShrink: 0 }} className="px-2"><Skeleton className="h-5 w-8 rounded" /></div>
@@ -857,7 +857,8 @@ function ListView({
             style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
             className={cn('py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none',
               i === 0 ? 'pl-0 pr-2' : 'px-2',
-              (c.key === 'qty' || c.key === 'price') && 'text-right'
+              (c.key === 'qty' || c.key === 'price') && 'text-right',
+              c.key === 'location' && 'text-center'
             )}>
             {c.label}
           </div>
@@ -937,7 +938,7 @@ function ListView({
                 )}
               </div>
               {/* Location */}
-              <div style={{ flexBasis: 120, flexShrink: 0 }} className="px-2 text-xs truncate" title={row.location ?? 'This part is not in the inventory'}>
+              <div style={{ flexBasis: 120, flexShrink: 0 }} className="px-2 text-xs text-center truncate" title={row.location ?? 'This part is not in the inventory'}>
                 {row.location ? (
                   <span className="text-foreground">{row.location}</span>
                 ) : (
