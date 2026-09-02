@@ -45,7 +45,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useCreatePart, useUpdatePart } from '@/hooks/useParts';
 import { useLocations } from '@/hooks/useLocations';
 import { type ApiPartResponse, type BOMCategory, getCategoryMeta } from './bomData';
-import { LocationCombobox, CategoryCombobox, UnitCombobox, type StockLocation, type StockRecord } from './inventoryData';
+import { LocationCombobox, LockedLocationField, CategoryCombobox, UnitCombobox, type StockLocation, type StockRecord } from './inventoryData';
 import type { PlaceOrderInput } from './PlaceOrderDialog';
 
 interface PickerPart {
@@ -113,11 +113,15 @@ interface AdjustQuantityDialogProps {
   partProjects?: Map<string, string[]>;
   /** Total BOM quantity-required per part, keyed by partId — prefills the Quantity field on part select. */
   partDemand?: Map<string, number>;
+  /** partId → the part's canonical stock location. When the selected part already has one
+   * (a prior order, or stock elsewhere), the location is locked to it — the first "New
+   * transaction" is what establishes it; after that, Transfer is the only way to move it. */
+  canonicalLocationByPartId?: Map<string, string>;
 }
 
 const emptyNewPart = { partNumber: '', name: '', description: '', category: '' as BOMCategory | '', manufacturer: '', mpn: '', unit: 'EA' };
 
-export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onAdjust, onPlaceOrder, initialPartId, partProjects, partDemand }: AdjustQuantityDialogProps) {
+export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onAdjust, onPlaceOrder, initialPartId, partProjects, partDemand, canonicalLocationByPartId }: AdjustQuantityDialogProps) {
   const isMobile = useIsMobile();
   const [selectedRecord, setSelectedRecord] = useState<PickerPart | null>(null);
   const [partPickerOpen, setPartPickerOpen] = useState(false);
@@ -221,6 +225,20 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
 
   const stockStatus = form.watch('stockStatus');
   const orderStatus = form.watch('orderStatus');
+
+  // In the "New transaction" flow, once a part has a canonical location (a prior order, or
+  // stock somewhere) the location is pinned there — the first-ever transaction for a
+  // brand-new part is what sets it. The row-level "Adjust quantity" (initialPartId) acts on
+  // an existing stock row, so it keeps that row's own location and isn't pinned here.
+  const lockedPartId = selectedRecord?.partId ?? createdPart?.id;
+  const lockedLocation = !initialPartId && lockedPartId
+    ? canonicalLocationByPartId?.get(lockedPartId)
+    : undefined;
+
+  useEffect(() => {
+    if (lockedLocation) form.setValue('location', lockedLocation, { shouldValidate: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedLocation]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -412,6 +430,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       }
     }
     const cat = (data.category || part.cat) as BOMCategory | undefined;
+    const location = lockedLocation ?? data.location;
 
     if (data.stockStatus === 'place_order') {
       onPlaceOrder({
@@ -422,7 +441,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         quantity: data.quantity,
         expectedDate: data.expectedDate?.trim() || undefined,
         leadTime: data.leadTimeDays,
-        location: data.location,
+        location,
         supplierRef: data.note?.trim() || undefined,
         note: data.orderNote?.trim() || undefined,
         description: data.description?.trim() || undefined,
@@ -433,7 +452,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       onAdjust({
         partId: part.partId,
         ...(selectedRecord ? {} : { pn: part.pn, name: part.name, cat }),
-        location: data.location as StockLocation,
+        location: location as StockLocation,
         direction: data.direction,
         quantity: data.quantity,
         reasonCode: data.reasonCode as string,
@@ -711,9 +730,13 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
-                      <FormControl>
-                        <LocationCombobox value={field.value} onChange={field.onChange} knownLocations={knownLocations} />
-                      </FormControl>
+                      {lockedLocation ? (
+                        <LockedLocationField location={lockedLocation} />
+                      ) : (
+                        <FormControl>
+                          <LocationCombobox value={field.value} onChange={field.onChange} knownLocations={knownLocations} />
+                        </FormControl>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
