@@ -147,11 +147,16 @@ export function AssistantProposalCard({ proposal, readOnly, onConfirm, onReject,
   const expired = isPending && new Date(proposal.expiresAt).getTime() <= Date.now();
   const terminal = TERMINAL_META[proposal.status];
 
-  // Not yet reviewed (fresh proposal) or the user clicked Edit — show the
-  // fill-in/editable form instead of the read-only card. Only ever true for
-  // a still-pending proposal with a form to prefill from; readOnly (share
-  // view) and terminal/formState-less proposals never enter this branch.
-  const isEditing = isPending && !readOnly && !!proposal.formState && (editingOverride ?? !proposal.reviewedAt);
+  // The user clicked Edit, or it's a fresh create that still needs its form
+  // filled in (a create can open as a blank draft — see proposeTaskChange's
+  // TaskCreateOp comment). An update already carries the specific field(s)
+  // the user asked to change, so it opens as the compact "from → to" card
+  // with Confirm/Edit — no need to re-surface the whole entity form for a
+  // one-field tweak. Only ever true for a still-pending proposal with a form
+  // to prefill from; readOnly (share view) and terminal/formState-less
+  // proposals never enter this branch.
+  const autoOpenForm = !proposal.reviewedAt && preview.actionKind === 'create';
+  const isEditing = isPending && !readOnly && !!proposal.formState && (editingOverride ?? autoOpenForm);
 
   const handleFormSubmit = async (edits: Record<string, unknown>) => {
     await onRevise?.(proposal.id, edits);
@@ -159,7 +164,11 @@ export function AssistantProposalCard({ proposal, readOnly, onConfirm, onReject,
   };
 
   const handleFormCancel = () => {
-    if (proposal.reviewedAt) {
+    // Cancelling an explicitly-opened Edit (or a re-edit of an already
+    // reviewed proposal) just drops back to the card. Only cancelling the
+    // auto-opened form of a fresh create — where there's no card to fall
+    // back to yet — dismisses the proposal outright.
+    if (editingOverride || proposal.reviewedAt) {
       setEditingOverride(false);
     } else {
       onReject?.(proposal.id);
