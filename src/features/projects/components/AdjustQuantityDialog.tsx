@@ -733,6 +733,28 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                 />
                 )}
 
+                {!initialPartId && (
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem className="sm:col-span-2">
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Description <span className="normal-case font-normal">optional</span>
+                      </FormLabel>
+                      <FormControl>
+                        <Textarea
+                          placeholder="Optional description..."
+                          className="min-h-[70px] resize-none"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                )}
+
                 {!showAddPart && !initialPartId && (
                   <FormField
                     control={form.control}
@@ -1018,28 +1040,6 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                       </FormItem>
                     )}
                   />
-                )}
-
-                {!initialPartId && (
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Description <span className="normal-case font-normal">optional</span>
-                      </FormLabel>
-                      <FormControl>
-                        <Textarea
-                          placeholder="Optional description..."
-                          className="min-h-[70px] resize-none"
-                          {...field}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 )}
 
                 {!initialPartId && (
