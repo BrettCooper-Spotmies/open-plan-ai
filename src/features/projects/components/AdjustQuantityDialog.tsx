@@ -137,6 +137,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   const [partPickerOpen, setPartPickerOpen] = useState(false);
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [showAddPart, setShowAddPart] = useState(false);
+  // Only surface the "select a part" hint after the user has actually tried to submit —
+  // showing it permanently on an untouched form is just noise.
+  const [triedSubmit, setTriedSubmit] = useState(false);
   const [newPart, setNewPart] = useState(emptyNewPart);
   const [createdPart, setCreatedPart] = useState<{ id: string; partNumber: string; name: string; category: BOMCategory } | null>(null);
   const [image, setImage] = useState<File | null>(null);
@@ -380,6 +383,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     form.reset();
     setSelectedRecord(null);
     setShowAddPart(false);
+    setTriedSubmit(false);
     setNewPart(emptyNewPart);
     setCreatedPart(null);
     handleRemoveImage();
@@ -486,6 +490,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   // Required fields (Reason code / Expected date) can sit below the fold in a scrolled dialog —
   // without this, a blocked submit looks like the button did nothing.
   const handleInvalid = (errors: FieldErrors<AdjustFormData>) => {
+    setTriedSubmit(true);
     const firstMessage = Object.values(errors)[0]?.message;
     toast.error(typeof firstMessage === 'string' ? firstMessage : 'Fill in all required fields before submitting');
   };
@@ -541,20 +546,18 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   control={form.control}
                   name="partId"
                   render={() => (
-                    <FormItem className="sm:col-span-2">
-                      <div className="flex items-center justify-between">
+                    <FormItem className={cn(showAddPart && 'sm:col-span-2')}>
+                      <div className="flex h-5 items-center justify-between gap-2">
                         <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Part <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                         {!showAddPart && (
-                          <Button
+                          <button
                             type="button"
-                            variant="link"
-                            size="sm"
-                            className="h-auto p-0 text-xs"
+                            className="flex shrink-0 items-center gap-1 text-xs font-medium leading-none text-primary hover:text-primary/80"
                             onClick={() => setShowAddPart(true)}
                           >
-                            <Plus className="h-3 w-3 mr-1" />
+                            <Plus className="h-3 w-3" />
                             Add new part
-                          </Button>
+                          </button>
                         )}
                       </div>
 
@@ -733,6 +736,24 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                 />
                 )}
 
+                {!showAddPart && !initialPartId && (
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <div className="flex h-5 items-center">
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Category <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                        </div>
+                        <FormControl>
+                          <CategoryCombobox value={field.value} onChange={field.onChange} placeholder="Select a part first..." extraCategories={extraCategories} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 {!initialPartId && (
                 <FormField
                   control={form.control}
@@ -755,28 +776,12 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                 />
                 )}
 
-                {!showAddPart && !initialPartId && (
-                  <FormField
-                    control={form.control}
-                    name="category"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Category <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
-                        <FormControl>
-                          <CategoryCombobox value={field.value} onChange={field.onChange} placeholder="Select a part first..." extraCategories={extraCategories} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-
                 {!initialPartId && (
                 <FormField
                   control={form.control}
                   name="location"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-2">
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Location <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                       {lockedLocation ? (
                         <LockedLocationField location={lockedLocation} />
@@ -796,31 +801,33 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   control={form.control}
                   name="stockStatus"
                   render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
-                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stock status</FormLabel>
-                      <FormControl>
-                        <ToggleGroup
-                          type="single"
-                          value={field.value}
-                          onValueChange={(v) => v && field.onChange(v)}
-                          className="justify-start gap-2"
-                        >
-                          <ToggleGroupItem
-                            value="in_stock"
-                            variant="outline"
-                            className="gap-1.5 flex-1 border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                    <FormItem className="sm:col-span-2 space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stock status</FormLabel>
+                        <FormControl>
+                          <ToggleGroup
+                            type="single"
+                            value={field.value}
+                            onValueChange={(v) => v && field.onChange(v)}
+                            className="gap-1"
                           >
-                            <Boxes className="h-3.5 w-3.5" /> Have stock
-                          </ToggleGroupItem>
-                          <ToggleGroupItem
-                            value="place_order"
-                            variant="outline"
-                            className="gap-1.5 flex-1 border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
-                          >
-                            <ShoppingCart className="h-3.5 w-3.5" /> Need to order
-                          </ToggleGroupItem>
-                        </ToggleGroup>
-                      </FormControl>
+                            <ToggleGroupItem
+                              value="in_stock"
+                              variant="outline"
+                              className="h-8 gap-1.5 px-3 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                            >
+                              <Boxes className="h-3.5 w-3.5" /> Have stock
+                            </ToggleGroupItem>
+                            <ToggleGroupItem
+                              value="place_order"
+                              variant="outline"
+                              className="h-8 gap-1.5 px-3 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                            >
+                              <ShoppingCart className="h-3.5 w-3.5" /> Need to order
+                            </ToggleGroupItem>
+                          </ToggleGroup>
+                        </FormControl>
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {stockStatus === 'place_order'
                           ? "Don't have it on hand — place a purchase order instead."
@@ -837,26 +844,26 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   control={form.control}
                   name="orderStatus"
                   render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
+                    <FormItem className="space-y-1.5">
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Order status</FormLabel>
                       <FormControl>
                         <ToggleGroup
                           type="single"
                           value={field.value}
                           onValueChange={(v) => v && field.onChange(v)}
-                          className="justify-start gap-2"
+                          className="grid grid-cols-2 gap-1"
                         >
                           <ToggleGroupItem
                             value="open"
                             variant="outline"
-                            className="gap-1.5 flex-1 border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                            className="h-8 gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
                           >
                             <ShoppingCart className="h-3.5 w-3.5" /> Already ordered
                           </ToggleGroupItem>
                           <ToggleGroupItem
                             value="planned"
                             variant="outline"
-                            className="gap-1.5 flex-1 border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                            className="h-8 gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
                           >
                             <Clock className="h-3.5 w-3.5" /> Want to order
                           </ToggleGroupItem>
@@ -918,35 +925,33 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   </>
                 ) : (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2">
-                      <FormField
-                        control={form.control}
-                        name="quantity"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quantity <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
-                            <FormControl>
-                              <Input type="number" min={1} {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
+                    <FormField
+                      control={form.control}
+                      name="quantity"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quantity <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                          <FormControl>
+                            <Input type="number" min={1} {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
-                      <FormField
-                        control={form.control}
-                        name="expectedDate"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Expected date</FormLabel>
-                            <FormControl>
-                              <Input type="date" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+                    <FormField
+                      control={form.control}
+                      name="expectedDate"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Expected date</FormLabel>
+                          <FormControl>
+                            <Input type="date" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
 
                     <div className="grid grid-cols-1 gap-4">
                       <FormField
@@ -1111,12 +1116,12 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
             </div>
 
             <DialogFooter className="flex-col gap-2 space-x-0 sm:space-x-0 px-4 sm:px-6 py-4 border-t shrink-0">
-              {!initialPartId && !selectedRecord && !createdPart && (
+              {triedSubmit && !initialPartId && !selectedRecord && !createdPart && (
                 <p className="text-xs text-destructive text-right">Select a part above before submitting.</p>
               )}
               <div className="flex flex-row justify-end gap-2">
                 <Button type="button" variant="outline" className="flex-1" onClick={attemptClose}>Cancel</Button>
-                <Button type="submit" className="flex-1" disabled={!selectedRecord && !createdPart}>
+                <Button type="submit" className="flex-1">
                   {stockStatus === 'place_order'
                     ? (orderStatus === 'planned' ? 'Flag as needed' : 'Place order')
                     : 'Save transaction'}
