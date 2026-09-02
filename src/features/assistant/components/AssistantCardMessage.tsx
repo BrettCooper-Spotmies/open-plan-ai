@@ -8,6 +8,7 @@ import {
   FileText,
   Flag,
   Folder,
+  GitBranch,
   GitPullRequest,
   Image as ImageIcon,
   LayoutGrid,
@@ -817,6 +818,7 @@ export function AssistantCardMessage({ card, createdAt, onFollowUp, readOnly }: 
                     ) : null;
                   })()}
                   {card.effectivity ? <Fact key="eff" icon={Flag} text={card.effectivity} /> : null}
+                  {card.revision ? <Fact key="rev" icon={GitBranch} text={`Revision ${card.revision}`} /> : null}
                   {card.scheduleImpact ? (
                     <Fact key="sched" icon={Clock} text={`${titleCase(card.scheduleImpact)} schedule impact`} />
                   ) : null}

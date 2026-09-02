@@ -366,6 +366,8 @@ export interface AssistantEcoDetailCard extends AssistantDetailCardBase {
   reason?: string;
   /** Preformatted, e.g. "Date — 2026-09-01" / "S/N break — 1050". */
   effectivity?: string;
+  /** The ECO's revision change, preformatted, e.g. "A → B". */
+  revision?: string;
   scheduleImpact?: string;
   /** Preformatted, e.g. "+$4.55/unit · $12,400 one-time". */
   costImpact?: string;
