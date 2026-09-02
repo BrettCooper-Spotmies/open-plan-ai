@@ -498,7 +498,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
           'p-0 flex flex-col gap-0 overflow-hidden',
           isMobile
             ? 'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none border-0 data-[state=open]:!slide-in-from-left-0 data-[state=open]:!slide-in-from-top-0 data-[state=closed]:!slide-out-to-left-0 data-[state=closed]:!slide-out-to-top-0'
-            : 'max-w-lg max-h-[90vh]'
+            : initialPartId
+              ? 'max-w-lg max-h-[90vh]'
+              : 'max-w-3xl max-h-[90vh]'
         )}
       >
         <DialogHeader className="px-4 sm:px-6 py-4 pr-10 border-b shrink-0 flex-row items-start gap-3 space-y-0">
@@ -526,13 +528,20 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit, handleInvalid)} className="flex flex-col flex-1 min-h-0">
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-              <div className="p-4 sm:p-6 space-y-5">
+              <div
+                className={cn(
+                  'p-4 sm:p-6',
+                  initialPartId
+                    ? 'space-y-5'
+                    : 'grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-5 items-start'
+                )}
+              >
                 {!initialPartId && (
                 <FormField
                   control={form.control}
                   name="partId"
                   render={() => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-2">
                       <div className="flex items-center justify-between">
                         <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Part <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                         {!showAddPart && (
@@ -768,7 +777,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   control={form.control}
                   name="stockStatus"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-2">
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stock status</FormLabel>
                       <FormControl>
                         <ToggleGroup
@@ -809,7 +818,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   control={form.control}
                   name="orderStatus"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-2">
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Order status</FormLabel>
                       <FormControl>
                         <ToggleGroup
@@ -893,7 +902,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   </>
                 ) : (
                   <>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2">
                       <FormField
                         control={form.control}
                         name="quantity"
@@ -951,7 +960,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   control={form.control}
                   name="note"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-2">
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         {stockStatus === 'place_order' ? 'Supplier / PO ref' : 'Note'} <span className="normal-case font-normal">optional</span>
                       </FormLabel>
@@ -972,7 +981,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     control={form.control}
                     name="purpose"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="sm:col-span-2">
                         <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Purpose <span className="normal-case font-normal">optional</span>
                         </FormLabel>
@@ -994,7 +1003,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     control={form.control}
                     name="orderNote"
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className="sm:col-span-2">
                         <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                           Notes <span className="normal-case font-normal">optional</span>
                         </FormLabel>
@@ -1016,7 +1025,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   control={form.control}
                   name="description"
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="sm:col-span-2">
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Description <span className="normal-case font-normal">optional</span>
                       </FormLabel>
@@ -1034,7 +1043,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                 )}
 
                 {!initialPartId && (
-                <div className="space-y-2">
+                <div className="space-y-2 sm:col-span-2">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Image <span className="normal-case font-normal">optional</span>
                   </Label>
