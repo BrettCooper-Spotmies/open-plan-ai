@@ -76,7 +76,7 @@ const adjustSchema = z.object({
   reasonCode: z.string().optional(),
   expectedDate: z.string().optional(),
   leadTimeDays: z.coerce.number().int().min(1, 'Lead time must be at least 1 day'),
-  note: z.string().max(300, 'Note must be less than 300 characters').optional(),
+  note: z.string().max(500, 'Note must be less than 500 characters').optional(),
   supplierRef: z.string().max(300, 'Supplier / PO ref must be less than 300 characters').optional(),
   description: z.string().max(500, 'Description must be less than 500 characters').optional(),
   orderNote: z.string().max(500, 'Notes must be less than 500 characters').optional(),
@@ -510,8 +510,22 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   // without this, a blocked submit looks like the button did nothing.
   const handleInvalid = (errors: FieldErrors<AdjustFormData>) => {
     setTriedSubmit(true);
-    const firstMessage = Object.values(errors)[0]?.message;
-    toast.error(typeof firstMessage === 'string' ? firstMessage : 'Fill in all required fields before submitting');
+    // Surface every failing field, not just Object.values(errors)[0] — with more than one
+    // error the arbitrary "first" one (schema order) often names a field the user isn't
+    // looking at, contradicting the inline messages (e.g. toast says Note, the red text
+    // under the cursor says Description).
+    const messages = Array.from(new Set(
+      Object.values(errors)
+        .map(e => (e && typeof e.message === 'string' ? e.message : null))
+        .filter((m): m is string => !!m)
+    ));
+    if (messages.length === 0) {
+      toast.error('Fill in all required fields before submitting');
+    } else if (messages.length === 1) {
+      toast.error(messages[0]);
+    } else {
+      toast.error('Fix the highlighted fields', { description: messages.join('\n') });
+    }
   };
 
   return (
