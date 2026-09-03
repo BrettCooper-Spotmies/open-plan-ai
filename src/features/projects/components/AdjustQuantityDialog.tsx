@@ -515,13 +515,19 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
               : <Pencil className="h-4 w-4" />}
           </div>
           <div className="text-left flex-1 min-w-0">
-            <DialogTitle>{initialPartId ? 'Adjust quantity' : 'New transaction'}</DialogTitle>
+            <DialogTitle>
+              {initialPartId
+                ? 'Adjust quantity'
+                : stockStatus === 'place_order'
+                  ? (orderStatus === 'planned' ? 'Plan a future order' : 'Place a purchase order')
+                  : 'Add stock on hand'}
+            </DialogTitle>
             <DialogDescription>
               {stockStatus === 'place_order'
-                ? (orderStatus === 'planned' ? 'Flags a future purchase need, not yet on order' : 'Creates a tracked purchase order')
+                ? (orderStatus === 'planned' ? 'Note parts you plan to order later' : 'Order parts from a supplier and track them')
                 : initialPartId
-                  ? 'Sets the on-hand count — logs the change as one ledger entry'
-                  : 'Writes one immutable ledger entry'}
+                  ? 'Set the correct on-hand count for this part'
+                  : 'Record parts you already have in inventory'}
             </DialogDescription>
           </div>
           <DialogClose className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity data-[state=open]:bg-accent data-[state=open]:text-muted-foreground hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none">
@@ -746,7 +752,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                           <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Category <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                         </div>
                         <FormControl>
-                          <CategoryCombobox value={field.value} onChange={field.onChange} placeholder="Select a part first..." extraCategories={extraCategories} />
+                          <CategoryCombobox value={field.value} onChange={field.onChange} placeholder="Select a category..." extraCategories={extraCategories} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -803,7 +809,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   render={({ field }) => (
                     <FormItem className="sm:col-span-2 space-y-1.5">
                       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Stock status</FormLabel>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Do you have this part?</FormLabel>
                         <FormControl>
                           <ToggleGroup
                             type="single"
@@ -816,22 +822,22 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                               variant="outline"
                               className="h-8 gap-1.5 px-3 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
                             >
-                              <Boxes className="h-3.5 w-3.5" /> Have stock
+                              <Boxes className="h-3.5 w-3.5" /> Have it on hand
                             </ToggleGroupItem>
                             <ToggleGroupItem
                               value="place_order"
                               variant="outline"
                               className="h-8 gap-1.5 px-3 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
                             >
-                              <ShoppingCart className="h-3.5 w-3.5" /> Need to order
+                              <ShoppingCart className="h-3.5 w-3.5" /> Need to order it
                             </ToggleGroupItem>
                           </ToggleGroup>
                         </FormControl>
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {stockStatus === 'place_order'
-                          ? "Don't have it on hand — place a purchase order instead."
-                          : 'Already have this part in hand — log the ledger entry directly.'}
+                          ? "You don't have it yet — this creates a purchase order to track."
+                          : 'You already have this part — it gets added to inventory now.'}
                       </p>
                       <FormMessage />
                     </FormItem>
@@ -845,7 +851,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   name="orderStatus"
                   render={({ field }) => (
                     <FormItem className="space-y-1.5">
-                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Order status</FormLabel>
+                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Has it been ordered yet?</FormLabel>
                       <FormControl>
                         <ToggleGroup
                           type="single"
@@ -858,21 +864,21 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                             variant="outline"
                             className="h-8 gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
                           >
-                            <ShoppingCart className="h-3.5 w-3.5" /> Already ordered
+                            <ShoppingCart className="h-3.5 w-3.5" /> Order placed
                           </ToggleGroupItem>
                           <ToggleGroupItem
                             value="planned"
                             variant="outline"
                             className="h-8 gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
                           >
-                            <Clock className="h-3.5 w-3.5" /> Want to order
+                            <Clock className="h-3.5 w-3.5" /> Not ordered yet
                           </ToggleGroupItem>
                         </ToggleGroup>
                       </FormControl>
                       <p className="text-xs text-muted-foreground">
                         {orderStatus === 'planned'
-                          ? "Not submitted to a supplier yet — won't count toward on-order totals until marked ordered."
-                          : 'Already submitted to a supplier — counts toward on-order/incoming totals.'}
+                          ? "Not sent to a supplier yet — it won't count toward incoming stock until you mark it ordered."
+                          : 'Sent to a supplier — it counts toward on-order and incoming stock.'}
                       </p>
                       <FormMessage />
                     </FormItem>
@@ -889,7 +895,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                              {initialPartId ? 'New on-hand count' : 'Quantity'} <span className="text-destructive" aria-hidden="true">*</span>
+                              {initialPartId ? 'New on-hand count' : 'Quantity on hand'} <span className="text-destructive" aria-hidden="true">*</span>
                             </FormLabel>
                             <FormControl>
                               <Input type="number" min={initialPartId ? 0 : 1} {...field} />
@@ -912,9 +918,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         name="leadTimeDays"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time (days) <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                             <FormControl>
-                              <Input type="number" min={0} step={1} placeholder="Days" {...field} />
+                              <Input type="number" min={0} step={1} placeholder="e.g. 7" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -930,7 +936,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                       name="quantity"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quantity <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Quantity to order <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                           <FormControl>
                             <Input type="number" min={1} {...field} />
                           </FormControl>
@@ -944,7 +950,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                       name="expectedDate"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Expected date</FormLabel>
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Expected delivery date</FormLabel>
                           <FormControl>
                             <Input type="date" {...field} />
                           </FormControl>
@@ -959,9 +965,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         name="leadTimeDays"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time (days) <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
                             <FormControl>
-                              <Input type="number" min={0} step={1} placeholder="Days" {...field} />
+                              <Input type="number" min={0} step={1} placeholder="e.g. 7" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -977,11 +983,11 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   render={({ field }) => (
                     <FormItem className="sm:col-span-2">
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        {stockStatus === 'place_order' ? 'Supplier / PO ref' : 'Note'}
+                        {stockStatus === 'place_order' ? 'Supplier or PO number' : 'Note'}
                       </FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder={stockStatus === 'place_order' ? 'PO-…' : 'Optional note...'}
+                          placeholder={stockStatus === 'place_order' ? 'e.g. PO-1234, or Acme Corp' : 'Optional note...'}
                           className="min-h-[70px] resize-none"
                           {...field}
                         />
@@ -998,11 +1004,11 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2">
                         <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          Purpose
+                          Reason for ordering
                         </FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Why is this being ordered?"
+                            placeholder="What is this order for?"
                             className="min-h-[70px] resize-none"
                             {...field}
                           />
@@ -1020,11 +1026,11 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     render={({ field }) => (
                       <FormItem className="sm:col-span-2">
                         <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                          Notes
+                          Additional notes
                         </FormLabel>
                         <FormControl>
                           <Textarea
-                            placeholder="Optional notes..."
+                            placeholder="Anything else worth recording..."
                             className="min-h-[70px] resize-none"
                             {...field}
                           />
@@ -1123,8 +1129,8 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                 <Button type="button" variant="outline" className="flex-1" onClick={attemptClose}>Cancel</Button>
                 <Button type="submit" className="flex-1">
                   {stockStatus === 'place_order'
-                    ? (orderStatus === 'planned' ? 'Flag as needed' : 'Place order')
-                    : 'Save transaction'}
+                    ? (orderStatus === 'planned' ? 'Save planned order' : 'Place order')
+                    : initialPartId ? 'Save adjustment' : 'Add to inventory'}
                 </Button>
               </div>
             </DialogFooter>
