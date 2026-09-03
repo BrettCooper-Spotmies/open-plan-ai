@@ -462,8 +462,12 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       setShowAddPart(false);
       setNewPart(emptyNewPart);
       toast.success(`Part ${created.partNumber} created`);
-    } catch {
-      toast.error('Failed to create part');
+    } catch (err) {
+      // apiClient surfaces the backend's error.message (e.g. "Part number 'CMP-0405-IMU'
+      // already exists") on the thrown Error — show that instead of a generic failure.
+      const reason =
+        err instanceof Error && err.message ? err.message : 'Failed to create part';
+      toast.error(reason);
     }
   };
 
