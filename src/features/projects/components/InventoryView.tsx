@@ -367,10 +367,22 @@ export function InventoryView({ orgId }: InventoryViewProps) {
           { source: 'response', leadTimeDays: result.leadTimeDays },
         ]);
         toast.success('Adjustment posted');
-        if (input.image && result.transactionId) {
-          attachmentsService
-            .upload({ entityId: result.transactionId, entityType: 'inventory_transaction', file: input.image })
-            .catch(() => toast.error('Adjustment saved, but the image failed to upload'));
+        if (input.images?.length && result.transactionId) {
+          const transactionId = result.transactionId;
+          Promise.allSettled(
+            input.images.map((file) =>
+              attachmentsService.upload({ entityId: transactionId, entityType: 'inventory_transaction', file }),
+            ),
+          ).then((results) => {
+            const failed = results.filter((r) => r.status === 'rejected').length;
+            if (failed > 0) {
+              toast.error(
+                failed === input.images!.length
+                  ? 'Adjustment saved, but the images failed to upload'
+                  : `Adjustment saved, but ${failed} of ${input.images!.length} images failed to upload`,
+              );
+            }
+          });
         }
       },
       onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to post adjustment'),

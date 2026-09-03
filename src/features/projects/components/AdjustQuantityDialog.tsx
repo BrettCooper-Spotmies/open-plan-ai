@@ -105,7 +105,7 @@ export interface AdjustQuantityInput {
   description?: string;
   lotNumber?: string;
   serialNumber?: string;
-  image?: File;
+  images?: File[];
   leadTimeDays?: number;
 }
 
@@ -143,8 +143,11 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   const [triedSubmit, setTriedSubmit] = useState(false);
   const [newPart, setNewPart] = useState(emptyNewPart);
   const [createdPart, setCreatedPart] = useState<{ id: string; partNumber: string; name: string; category: BOMCategory } | null>(null);
-  const [image, setImage] = useState<File | null>(null);
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [images, setImages] = useState<File[]>([]);
+  const [imagePreviewUrls, setImagePreviewUrls] = useState<string[]>([]);
+  // Mirror of imagePreviewUrls for the unmount cleanup — an effect with [] deps
+  // can't read current state otherwise.
+  const imagePreviewUrlsRef = useRef<string[]>([]);
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -287,33 +290,35 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialPartId, pickerParts]);
 
-  const isFormDirty = form.formState.isDirty || showAddPart || !!image;
+  const isFormDirty = form.formState.isDirty || showAddPart || images.length > 0;
 
-  const applyImageFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      toast.error('Please select an image file');
-      return;
+  const applyImageFiles = (files: File[]) => {
+    const valid = files.filter((f) => f.type.startsWith('image/'));
+    if (valid.length < files.length) {
+      toast.error(valid.length === 0 ? 'Please select an image file' : 'Some files were skipped — only images can be attached');
     }
-    setImage(file);
-    setImagePreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return URL.createObjectURL(file);
+    if (valid.length === 0) return;
+    setImages((prev) => [...prev, ...valid]);
+    setImagePreviewUrls((prev) => {
+      const next = [...prev, ...valid.map((f) => URL.createObjectURL(f))];
+      imagePreviewUrlsRef.current = next;
+      return next;
     });
   };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const files = Array.from(e.target.files ?? []);
     e.target.value = '';
-    if (!file) return;
-    applyImageFile(file);
+    if (files.length === 0) return;
+    applyImageFiles(files);
   };
 
   const handleImageDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDraggingImage(false);
-    const file = e.dataTransfer.files?.[0];
-    if (!file) return;
-    applyImageFile(file);
+    const files = Array.from(e.dataTransfer.files ?? []);
+    if (files.length === 0) return;
+    applyImageFiles(files);
   };
 
   const handleCloseCamera = () => {
@@ -360,7 +365,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
     canvas.toBlob((blob) => {
       if (!blob) return;
-      applyImageFile(new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+      applyImageFiles([new File([blob], `photo-${Date.now()}.jpg`, { type: 'image/jpeg' })]);
       handleCloseCamera();
     }, 'image/jpeg', 0.92);
   };
@@ -383,19 +388,30 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     };
   }, []);
 
-  const handleRemoveImage = () => {
-    setImage(null);
-    setImagePreviewUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
+  const handleRemoveImage = (index: number) => {
+    setImages((prev) => prev.filter((_, i) => i !== index));
+    setImagePreviewUrls((prev) => {
+      const removed = prev[index];
+      if (removed) URL.revokeObjectURL(removed);
+      const next = prev.filter((_, i) => i !== index);
+      imagePreviewUrlsRef.current = next;
+      return next;
+    });
+  };
+
+  const clearImages = () => {
+    setImages([]);
+    setImagePreviewUrls((prev) => {
+      prev.forEach((url) => URL.revokeObjectURL(url));
+      imagePreviewUrlsRef.current = [];
+      return [];
     });
   };
 
   useEffect(() => {
     return () => {
-      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      imagePreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resetAndClose = () => {
@@ -405,7 +421,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     setTriedSubmit(false);
     setNewPart(emptyNewPart);
     setCreatedPart(null);
-    handleRemoveImage();
+    clearImages();
     handleCloseCamera();
     onClose();
   };
@@ -497,9 +513,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         reasonCode: data.reasonCode as string,
         note: data.note?.trim() || undefined,
         description: data.description?.trim() || undefined,
-        // Lead time and image are only collected in the "New transaction" flow —
+        // Lead time and images are only collected in the "New transaction" flow —
         // the row-level "Adjust quantity" dialog omits both fields.
-        image: initialPartId ? undefined : image ?? undefined,
+        images: initialPartId || images.length === 0 ? undefined : images,
         leadTimeDays: initialPartId ? undefined : data.leadTimeDays,
       });
     }
@@ -1099,7 +1115,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                 {!initialPartId && (
                 <div className="space-y-2 sm:col-span-2">
                   <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Image
+                    Images
                   </Label>
                   {cameraStream ? (
                     <div className="space-y-2">
@@ -1120,54 +1136,65 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         </Button>
                       </div>
                     </div>
-                  ) : imagePreviewUrl ? (
-                    <div className="relative w-fit">
-                      <img
-                        src={imagePreviewUrl}
-                        alt="Attached"
-                        className="h-24 w-24 rounded-md object-cover border"
-                      />
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="icon"
-                        className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow"
-                        onClick={handleRemoveImage}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
                   ) : (
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
-                      onDragLeave={() => setIsDraggingImage(false)}
-                      onDrop={handleImageDrop}
-                      className={cn(
-                        'flex flex-col items-center justify-center gap-2 rounded-md border border-dashed px-4 py-6 text-center transition-colors',
-                        isDraggingImage ? 'border-primary bg-primary/5' : 'border-input'
+                    <div className="space-y-3">
+                      {imagePreviewUrls.length > 0 && (
+                        <div className="flex flex-wrap gap-3">
+                          {imagePreviewUrls.map((url, i) => (
+                            <div key={url} className="relative w-fit">
+                              <img
+                                src={url}
+                                alt={`Attached ${i + 1}`}
+                                className="h-24 w-24 rounded-md object-cover border"
+                              />
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="icon"
+                                className="absolute -top-2 -right-2 h-6 w-6 rounded-full shadow"
+                                onClick={() => handleRemoveImage(i)}
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       )}
-                    >
-                      <ImagePlus className="h-5 w-5 text-muted-foreground" />
-                      <p className="text-sm text-muted-foreground">Drag & drop an image here</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors">
-                          <Upload className="h-3.5 w-3.5" />
-                          Browse files
-                          <input
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            onChange={handleImageSelect}
-                          />
-                        </label>
-                        <button
-                          type="button"
-                          onClick={handleOpenCamera}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
-                        >
-                          <Camera className="h-3.5 w-3.5" />
-                          Take photo
-                        </button>
+                      <div
+                        onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
+                        onDragLeave={() => setIsDraggingImage(false)}
+                        onDrop={handleImageDrop}
+                        className={cn(
+                          'flex flex-col items-center justify-center gap-2 rounded-md border border-dashed text-center transition-colors',
+                          imagePreviewUrls.length > 0 ? 'px-4 py-4' : 'px-4 py-6',
+                          isDraggingImage ? 'border-primary bg-primary/5' : 'border-input'
+                        )}
+                      >
+                        <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                        <p className="text-sm text-muted-foreground">
+                          {imagePreviewUrls.length > 0 ? 'Drag & drop to add more images' : 'Drag & drop images here'}
+                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors">
+                            <Upload className="h-3.5 w-3.5" />
+                            Browse files
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              className="hidden"
+                              onChange={handleImageSelect}
+                            />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleOpenCamera}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
+                          >
+                            <Camera className="h-3.5 w-3.5" />
+                            Take photo
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
