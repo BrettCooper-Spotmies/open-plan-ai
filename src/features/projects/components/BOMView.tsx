@@ -682,10 +682,10 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
           <Section title="Lead Time" icon={Clock} count={draft.leadOp !== 'any' && draft.leadValue ? 1 : 0}>
             <div className="flex bg-muted border border-border rounded-lg p-0.5 gap-0.5 mb-2.5">
-              {([['any', 'Any'], ['lt', 'Less than'], ['gt', 'Greater than'], ['eq', 'Exactly']] as const).map(([id, label]) => (
-                <button key={id} onClick={() => set('leadOp', id)}
+              {([['lt', 'Less than'], ['gt', 'Greater than'], ['eq', 'Exactly']] as const).map(([id, label]) => (
+                <button key={id} onClick={() => set('leadOp', draft.leadOp === id ? 'any' : id)}
                   className={cn('flex-1 py-1.5 rounded-md text-[10.5px] font-medium cursor-pointer border-none transition-colors whitespace-nowrap',
-                    draft.leadOp === id ? 'bg-foreground text-background' : 'bg-transparent text-muted-foreground hover:text-foreground')}>
+                    draft.leadOp === id ? 'bg-primary/10 text-primary' : 'bg-transparent text-muted-foreground hover:text-foreground')}>
                   {label}
                 </button>
               ))}
