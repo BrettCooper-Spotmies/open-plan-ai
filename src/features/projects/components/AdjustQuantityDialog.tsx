@@ -322,11 +322,28 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   };
 
   const handleOpenCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error(
+        window.isSecureContext
+          ? 'This browser does not support camera capture — use "Browse files" instead.'
+          : 'Camera capture needs a secure (HTTPS) connection — use "Browse files" instead.',
+      );
+      return;
+    }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       setCameraStream(stream);
-    } catch {
-      toast.error('Camera access was denied or unavailable');
+    } catch (err) {
+      const name = err instanceof DOMException ? err.name : '';
+      const message =
+        name === 'NotAllowedError'
+          ? 'Camera permission was blocked. Allow camera access for this site in your browser settings, then try again.'
+          : name === 'NotFoundError' || name === 'OverconstrainedError'
+            ? 'No camera was found on this device — use "Browse files" instead.'
+            : name === 'NotReadableError'
+              ? 'The camera is already in use by another app or tab. Close it and try again.'
+              : 'Camera access was denied or unavailable';
+      toast.error(message);
     }
   };
 
