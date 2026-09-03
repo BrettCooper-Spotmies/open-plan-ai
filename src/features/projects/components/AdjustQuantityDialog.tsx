@@ -77,6 +77,7 @@ const adjustSchema = z.object({
   expectedDate: z.string().optional(),
   leadTimeDays: z.coerce.number().int().min(1, 'Lead time must be at least 1 day'),
   note: z.string().max(300, 'Note must be less than 300 characters').optional(),
+  supplierRef: z.string().max(300, 'Supplier / PO ref must be less than 300 characters').optional(),
   description: z.string().max(500, 'Description must be less than 500 characters').optional(),
   orderNote: z.string().max(500, 'Notes must be less than 500 characters').optional(),
   purpose: z.string().max(500, 'Purpose must be less than 500 characters').optional(),
@@ -231,6 +232,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       expectedDate: '',
       leadTimeDays: 1,
       note: '',
+      supplierRef: '',
       description: '',
       orderNote: '',
       purpose: '',
@@ -477,7 +479,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         expectedDate: data.expectedDate?.trim() || undefined,
         leadTime: data.leadTimeDays,
         location,
-        supplierRef: data.note?.trim() || undefined,
+        supplierRef: data.supplierRef?.trim() || undefined,
         note: data.orderNote?.trim() || undefined,
         description: data.description?.trim() || undefined,
         purpose: data.purpose?.trim() || undefined,
@@ -998,29 +1000,43 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   </>
                 )}
 
-                <FormField
-                  control={form.control}
-                  name="note"
-                  render={({ field }) => (
-                    <FormItem className={stockStatus === 'place_order' ? undefined : 'sm:col-span-2'}>
-                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        {stockStatus === 'place_order' ? 'Supplier or PO number' : 'Note'}
-                      </FormLabel>
-                      <FormControl>
-                        {stockStatus === 'place_order' ? (
+                {stockStatus === 'place_order' ? (
+                  <FormField
+                    control={form.control}
+                    name="supplierRef"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Supplier or PO number
+                        </FormLabel>
+                        <FormControl>
                           <Input placeholder="e.g. PO-1234, or Acme Corp" {...field} />
-                        ) : (
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                ) : (
+                  <FormField
+                    control={form.control}
+                    name="note"
+                    render={({ field }) => (
+                      <FormItem className="sm:col-span-2">
+                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Note
+                        </FormLabel>
+                        <FormControl>
                           <Textarea
                             placeholder="Optional note..."
                             className="min-h-[70px] resize-none"
                             {...field}
                           />
-                        )}
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 {stockStatus === 'place_order' && (
                   <FormField
