@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
 import { useBomTree, useCreateBomNode, useDecideApprovalRequest, useDeleteBomNode, useAddRequirement, useProjectApprovalRequests } from '@/hooks/useBom';
 import { useCreatePart, useUpdatePart } from '@/hooks/useParts';
@@ -855,12 +856,20 @@ function ListView({
         {HEADERS.map((c, i) => (
           <div key={c.key}
             style={{ flexBasis: c.w ?? 'auto', flexGrow: c.w ? 0 : 1, flexShrink: c.w ? 0 : 1 }}
-            className={cn('py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none',
+            className={cn('py-2.5 text-[11px] font-medium text-muted-foreground uppercase tracking-wider select-none text-left',
               i === 0 ? 'pl-0 pr-2' : 'px-2',
+              c.key === 'level' && 'flex items-center',
               (c.key === 'qty' || c.key === 'price') && 'text-right',
               c.key === 'location' && 'text-center'
             )}>
-            {c.label}
+            {c.key === 'level' ? (
+              <>
+                <span className="inline-flex items-center p-0.5" aria-hidden="true" style={{ visibility: 'hidden' }}>
+                  <ChevronDown className="w-3 h-3" />
+                </span>
+                <span className="ml-0.5">{c.label}</span>
+              </>
+            ) : c.label}
           </div>
         ))}
       </div>
@@ -901,7 +910,7 @@ function ListView({
                     </span>
                   ) : <span className="w-3 inline-block" />}
                 </span>
-                <span className={cn('text-xs font-semibold ml-0.5 tabular-nums',
+                <span className={cn('text-xs font-semibold ml-0.5 tabular-nums text-left',
                   row.level === 0 ? 'text-foreground' : row.level === 1 ? 'text-muted-foreground' : 'text-muted-foreground/60'
                 )}>
                   {row.levelLabel ?? row.level}
@@ -912,11 +921,16 @@ function ListView({
               <div className="flex-1 min-w-0 px-2 flex items-center gap-2.5">
                 <PartImageThumb imageUrl={row.imageUrl} cat={row.cat} size={32} hoverZoom />
                 <div className="flex-1 min-w-0">
-                  <span className={cn('text-sm block truncate',
-                    row.level === 0 ? 'font-semibold text-foreground' : row.level === 1 ? 'font-medium text-foreground' : 'text-muted-foreground'
-                  )}>
-                    {row.name || row.desc}
-                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className={cn('text-sm block truncate text-left',
+                        row.level === 0 ? 'font-semibold text-foreground' : row.level === 1 ? 'font-medium text-foreground' : 'text-muted-foreground'
+                      )}>
+                        {row.name || row.desc}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm break-words">{row.name || row.desc}</TooltipContent>
+                  </Tooltip>
                   <span className="text-xs font-medium font-mono block truncate text-muted-foreground">{row.pn}</span>
                 </div>
               </div>
