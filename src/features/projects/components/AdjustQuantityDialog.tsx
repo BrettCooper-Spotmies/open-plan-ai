@@ -825,37 +825,39 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   name="stockStatus"
                   render={({ field }) => (
                     <FormItem className="sm:col-span-2 space-y-1.5">
-                      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-                        <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Do you have this part?</FormLabel>
+                      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Do you have this part?</FormLabel>
+                          <p className="text-xs text-muted-foreground">
+                            {stockStatus === 'place_order'
+                              ? "You don't have it yet — this creates a purchase order to track."
+                              : 'You already have this part — it gets added to inventory now.'}
+                          </p>
+                        </div>
                         <FormControl>
                           <ToggleGroup
                             type="single"
                             value={field.value}
                             onValueChange={(v) => v && field.onChange(v)}
-                            className="gap-1"
+                            className="grid w-full shrink-0 grid-cols-2 gap-1 sm:w-[20rem]"
                           >
                             <ToggleGroupItem
                               value="in_stock"
                               variant="outline"
-                              className="h-8 gap-1.5 px-3 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                              className="h-8 w-full gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
                             >
                               <Boxes className="h-3.5 w-3.5" /> Have it on hand
                             </ToggleGroupItem>
                             <ToggleGroupItem
                               value="place_order"
                               variant="outline"
-                              className="h-8 gap-1.5 px-3 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                              className="h-8 w-full gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
                             >
                               <ShoppingCart className="h-3.5 w-3.5" /> Need to order it
                             </ToggleGroupItem>
                           </ToggleGroup>
                         </FormControl>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {stockStatus === 'place_order'
-                          ? "You don't have it yet — this creates a purchase order to track."
-                          : 'You already have this part — it gets added to inventory now.'}
-                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -867,36 +869,40 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   control={form.control}
                   name="orderStatus"
                   render={({ field }) => (
-                    <FormItem className="space-y-1.5">
-                      <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Has it been ordered yet?</FormLabel>
-                      <FormControl>
-                        <ToggleGroup
-                          type="single"
-                          value={field.value}
-                          onValueChange={(v) => v && field.onChange(v)}
-                          className="grid grid-cols-2 gap-1"
-                        >
-                          <ToggleGroupItem
-                            value="open"
-                            variant="outline"
-                            className="h-8 gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                    <FormItem className="sm:col-span-2 space-y-1.5">
+                      <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Has it been ordered yet?</FormLabel>
+                          <p className="text-xs text-muted-foreground">
+                            {orderStatus === 'planned'
+                              ? "Not sent to a supplier yet — won't count as incoming stock."
+                              : 'Sent to a supplier — counts as incoming stock.'}
+                          </p>
+                        </div>
+                        <FormControl>
+                          <ToggleGroup
+                            type="single"
+                            value={field.value}
+                            onValueChange={(v) => v && field.onChange(v)}
+                            className="grid w-full shrink-0 grid-cols-2 gap-1 sm:w-[20rem]"
                           >
-                            <ShoppingCart className="h-3.5 w-3.5" /> Order placed
-                          </ToggleGroupItem>
-                          <ToggleGroupItem
-                            value="planned"
-                            variant="outline"
-                            className="h-8 gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
-                          >
-                            <Clock className="h-3.5 w-3.5" /> Not ordered yet
-                          </ToggleGroupItem>
-                        </ToggleGroup>
-                      </FormControl>
-                      <p className="text-xs text-muted-foreground">
-                        {orderStatus === 'planned'
-                          ? "Not sent to a supplier yet — it won't count toward incoming stock until you mark it ordered."
-                          : 'Sent to a supplier — it counts toward on-order and incoming stock.'}
-                      </p>
+                            <ToggleGroupItem
+                              value="open"
+                              variant="outline"
+                              className="h-8 w-full gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                            >
+                              <ShoppingCart className="h-3.5 w-3.5" /> Order placed
+                            </ToggleGroupItem>
+                            <ToggleGroupItem
+                              value="planned"
+                              variant="outline"
+                              className="h-8 w-full gap-1.5 px-2 text-xs border-input data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                            >
+                              <Clock className="h-3.5 w-3.5" /> Not ordered yet
+                            </ToggleGroupItem>
+                          </ToggleGroup>
+                        </FormControl>
+                      </div>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -976,21 +982,19 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                       )}
                     />
 
-                    <div className="grid grid-cols-1 gap-4">
-                      <FormField
-                        control={form.control}
-                        name="leadTimeDays"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time (days) <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
-                            <FormControl>
-                              <Input type="number" min={0} step={1} placeholder="e.g. 7" {...field} />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                    </div>
+                    <FormField
+                      control={form.control}
+                      name="leadTimeDays"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time (days) <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                          <FormControl>
+                            <Input type="number" min={0} step={1} placeholder="e.g. 7" {...field} />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   </>
                 )}
 
@@ -998,16 +1002,20 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                   control={form.control}
                   name="note"
                   render={({ field }) => (
-                    <FormItem className="sm:col-span-2">
+                    <FormItem className={stockStatus === 'place_order' ? undefined : 'sm:col-span-2'}>
                       <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         {stockStatus === 'place_order' ? 'Supplier or PO number' : 'Note'}
                       </FormLabel>
                       <FormControl>
-                        <Textarea
-                          placeholder={stockStatus === 'place_order' ? 'e.g. PO-1234, or Acme Corp' : 'Optional note...'}
-                          className="min-h-[70px] resize-none"
-                          {...field}
-                        />
+                        {stockStatus === 'place_order' ? (
+                          <Input placeholder="e.g. PO-1234, or Acme Corp" {...field} />
+                        ) : (
+                          <Textarea
+                            placeholder="Optional note..."
+                            className="min-h-[70px] resize-none"
+                            {...field}
+                          />
+                        )}
                       </FormControl>
                       <FormMessage />
                     </FormItem>
