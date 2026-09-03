@@ -75,7 +75,12 @@ const adjustSchema = z.object({
   quantity: z.coerce.number().int().min(0, 'Quantity must be 0 or more'),
   reasonCode: z.string().optional(),
   expectedDate: z.string().optional(),
-  leadTimeDays: z.coerce.number().int().min(1, 'Lead time must be at least 1 day'),
+  // Optional — left blank when the part's BOM revision defines no lead time. Only a typed
+  // value is validated (must be a whole number ≥ 1); an empty field is allowed.
+  leadTimeDays: z.union([
+    z.literal(''),
+    z.coerce.number().int().min(1, 'Lead time must be at least 1 day'),
+  ]).optional(),
   note: z.string().max(500, 'Note must be less than 500 characters').optional(),
   supplierRef: z.string().max(300, 'Supplier / PO ref must be less than 300 characters').optional(),
   description: z.string().max(500, 'Description must be less than 500 characters').optional(),
@@ -233,7 +238,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       quantity: 1,
       reasonCode: '',
       expectedDate: '',
-      leadTimeDays: 1,
+      leadTimeDays: '',
       note: '',
       supplierRef: '',
       description: '',
@@ -285,7 +290,8 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     setSelectedRecord(match);
     form.setValue('location', match.location, { shouldValidate: true });
     form.setValue('category', match.cat ?? '', { shouldValidate: true });
-    form.setValue('leadTimeDays', match.leadTimeDays > 0 ? match.leadTimeDays : 1, { shouldValidate: true });
+    // Prefill from the part's BOM lead time; leave blank when the BOM defines none.
+    form.setValue('leadTimeDays', match.leadTimeDays > 0 ? match.leadTimeDays : '', { shouldValidate: true });
     form.setValue('quantity', match.demandQty > 0 ? match.demandQty : 1, { shouldValidate: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialPartId, pickerParts]);
@@ -484,6 +490,8 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     }
     const cat = (data.category || part.cat) as BOMCategory | undefined;
     const location = lockedLocation ?? data.location;
+    // Blank lead time (BOM defined none, user left it empty) is passed through as undefined.
+    const leadTimeDays = typeof data.leadTimeDays === 'number' ? data.leadTimeDays : undefined;
 
     if (data.stockStatus === 'place_order') {
       onPlaceOrder({
@@ -493,7 +501,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         cat: cat as BOMCategory,
         quantity: data.quantity,
         expectedDate: data.expectedDate?.trim() || undefined,
-        leadTime: data.leadTimeDays,
+        leadTime: leadTimeDays,
         location,
         supplierRef: data.supplierRef?.trim() || undefined,
         note: data.orderNote?.trim() || undefined,
@@ -516,7 +524,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         // Lead time and images are only collected in the "New transaction" flow —
         // the row-level "Adjust quantity" dialog omits both fields.
         images: initialPartId || images.length === 0 ? undefined : images,
-        leadTimeDays: initialPartId ? undefined : data.leadTimeDays,
+        leadTimeDays: initialPartId ? undefined : leadTimeDays,
       });
     }
     resetAndClose();
@@ -672,7 +680,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                                         form.setValue('partId', r.partId, { shouldDirty: true, shouldValidate: true });
                                         form.setValue('location', r.location, { shouldDirty: true, shouldValidate: true });
                                         form.setValue('category', r.cat ?? '', { shouldDirty: true, shouldValidate: true });
-                                        form.setValue('leadTimeDays', r.leadTimeDays > 0 ? r.leadTimeDays : 1, { shouldDirty: true, shouldValidate: true });
+                                        form.setValue('leadTimeDays', r.leadTimeDays > 0 ? r.leadTimeDays : '', { shouldDirty: true, shouldValidate: true });
                                         form.setValue('quantity', r.demandQty > 0 ? r.demandQty : 1, { shouldDirty: true, shouldValidate: true });
                                         setPartPickerOpen(false);
                                         setPartSearch('');
@@ -975,9 +983,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                         name="leadTimeDays"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time (days) <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                            <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time (days)</FormLabel>
                             <FormControl>
-                              <Input type="number" min={0} step={1} placeholder="e.g. 7" {...field} />
+                              <Input type="number" min={1} step={1} placeholder="e.g. 7" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1021,9 +1029,9 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                       name="leadTimeDays"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time (days) <span className="text-destructive" aria-hidden="true">*</span></FormLabel>
+                          <FormLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Lead time (days)</FormLabel>
                           <FormControl>
-                            <Input type="number" min={0} step={1} placeholder="e.g. 7" {...field} />
+                            <Input type="number" min={1} step={1} placeholder="e.g. 7" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
