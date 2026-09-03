@@ -305,7 +305,9 @@ export function ReceiveStockDialog({ isOpen, onClose, orgId, parts, orders, onRe
                                 !selectedPart && 'text-muted-foreground'
                               )}
                             >
-                              {selectedPart ? `${selectedPart.partNumber} — ${selectedPart.name}` : 'Select a part...'}
+                              <span className="min-w-0 truncate">
+                                {selectedPart ? `${selectedPart.partNumber} — ${selectedPart.name}` : 'Select a part...'}
+                              </span>
                               <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </FormControl>

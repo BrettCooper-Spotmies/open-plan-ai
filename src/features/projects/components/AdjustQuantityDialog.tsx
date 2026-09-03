@@ -635,11 +635,13 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                                   !selectedRecord && !createdPart && 'text-muted-foreground'
                                 )}
                               >
-                                {selectedRecord
-                                  ? `${selectedRecord.pn} — ${selectedRecord.name}`
-                                  : createdPart
-                                    ? `${createdPart.partNumber} — ${createdPart.name}`
-                                    : 'Select a part...'}
+                                <span className="min-w-0 truncate">
+                                  {selectedRecord
+                                    ? `${selectedRecord.pn} — ${selectedRecord.name}`
+                                    : createdPart
+                                      ? `${createdPart.partNumber} — ${createdPart.name}`
+                                      : 'Select a part...'}
+                                </span>
                                 <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                               </Button>
                             </FormControl>
