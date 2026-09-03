@@ -100,7 +100,7 @@ export interface AdjustQuantityInput {
   /** 'set' overwrites on-hand with `quantity`; 'delta' adds `quantity` per `direction`. */
   mode: 'delta' | 'set';
   quantity: number;
-  reasonCode: string;
+  reasonCode?: string;
   note?: string;
   description?: string;
   lotNumber?: string;
@@ -510,7 +510,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
         // Row-level "Adjust quantity" sets the absolute on-hand count; "New transaction" adds a delta.
         mode: initialPartId ? 'set' : 'delta',
         quantity: data.quantity,
-        reasonCode: data.reasonCode as string,
+        reasonCode: data.reasonCode?.trim() || undefined,
         note: data.note?.trim() || undefined,
         description: data.description?.trim() || undefined,
         // Lead time and images are only collected in the "New transaction" flow —
