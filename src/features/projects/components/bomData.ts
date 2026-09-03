@@ -88,7 +88,7 @@ export const EMPTY_FILTERS = {
   categories: [] as string[],
   owners: [] as string[],
   bomType: 'all' as 'all' | 'top' | 'catalog',
-  mpn: '',
+  mpns: [] as string[],
 };
 export type BOMFilters = typeof EMPTY_FILTERS;
 

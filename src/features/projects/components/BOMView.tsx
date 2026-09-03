@@ -89,6 +89,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { MultiSelect } from '@/components/ui/multi-select';
 import { cn } from '@/lib/utils';
 import {
   BOMNode, BOMFilters, BOMStatus, EMPTY_FILTERS,
@@ -540,7 +541,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
   open: boolean; filters: BOMFilters;
   setFilters: React.Dispatch<React.SetStateAction<BOMFilters>>;
   onClose: () => void;
-  facets: { units: string[]; manufacturers: string[]; suppliers: string[]; owners: string[]; categories: string[] };
+  facets: { units: string[]; manufacturers: string[]; suppliers: string[]; owners: string[]; categories: string[]; mpns: string[] };
   currencySymbol: string;
 }) {
   const [draft, setDraft] = useState<BOMFilters>({ ...filters });
@@ -597,7 +598,7 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
     draft.categories.length +
     (draft.priceMin || draft.priceMax ? 1 : 0) +
     (draft.leadOp !== 'any' && draft.leadValue ? 1 : 0) +
-    (draft.mpn ? 1 : 0);
+    draft.mpns.length;
 
   return (
     <>
@@ -787,15 +788,14 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
             </div>
           </Section>
 
-          <Section title="Manufacturer Part Number (MPN)" icon={Hash} count={draft.mpn ? 1 : 0}>
-            <div className="flex items-center gap-2 bg-muted border border-border rounded-md px-2.5 py-1.5">
-              <Hash className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              <input
-                value={draft.mpn} onChange={e => set('mpn', e.target.value)}
-                placeholder="e.g. INF-4A29C"
-                className="bg-transparent border-none outline-none text-foreground text-xs w-full font-mono"
-              />
-            </div>
+          <Section title="Manufacturer Part Number (MPN)" icon={Hash} count={draft.mpns.length}>
+            <MultiSelect
+              options={facets.mpns.map(m => ({ label: m, value: m }))}
+              selected={draft.mpns}
+              onChange={v => set('mpns', v)}
+              placeholder="Select MPN…"
+              contentClassName="z-[70]"
+            />
           </Section>
         </div>
 
@@ -1621,6 +1621,7 @@ export function BOMView({
     suppliers: [...new Set(allNodes.map(n => n.distributor))].sort(),
     owners: [...new Set(allNodes.map(n => n.owner))].sort(),
     categories: [...new Set(allNodes.map(n => n.cat))].sort(),
+    mpns: [...new Set(allNodes.map(n => n.mpn))].filter(Boolean).sort(),
   }), [allNodes]);
 
   const activeCount =
@@ -1629,7 +1630,7 @@ export function BOMView({
     filters.categories.length +
     (filters.priceMin || filters.priceMax ? 1 : 0) +
     (filters.leadOp !== 'any' && filters.leadValue ? 1 : 0) +
-    (filters.mpn ? 1 : 0);
+    filters.mpns.length;
 
   const pred = useCallback((row: BOMNode) => {
     const q = search.toLowerCase();
@@ -1642,7 +1643,7 @@ export function BOMView({
     if (filters.owners.length && !filters.owners.includes(row.owner)) return false;
     if (filters.categories.length && !filters.categories.includes(row.cat)) return false;
     if (filters.bomType !== 'all' && bomTypeOf(row) !== filters.bomType) return false;
-    if (filters.mpn && !row.mpn.toLowerCase().includes(filters.mpn.toLowerCase())) return false;
+    if (filters.mpns.length && !filters.mpns.includes(row.mpn)) return false;
     const pMin = parseFloat(filters.priceMin), pMax = parseFloat(filters.priceMax);
     if (!isNaN(pMin) && row.price < pMin) return false;
     if (!isNaN(pMax) && row.price > pMax) return false;
