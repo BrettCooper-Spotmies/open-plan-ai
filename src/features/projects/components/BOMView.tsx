@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
-import { useBomTree, useCreateBomNode, useDecideApprovalRequest, useDeleteBomNode, useAddRequirement, useProjectApprovalRequests } from '@/hooks/useBom';
+import { useBomTree, useCreateBomNode, useDeleteBomNode, useAddRequirement, useProjectApprovalRequests } from '@/hooks/useBom';
 import { useCreatePart, useUpdatePart } from '@/hooks/useParts';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useAuth } from '@/contexts/AuthContext';
@@ -103,7 +103,6 @@ import { BOMStatusPill, ReqTag, PartImageThumb } from './BOMShared';
 import { BOMDetailScreen, AddSubcomponentDialog } from './BOMDetailScreen';
 import { BOMMapView } from './BOMMapView';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
-import { BOMRejectDialog } from './BOMRejectDialog';
 import { BOMImportSubcomponentsDialog } from './BOMImportSubcomponentsDialog';
 import { ImportBomDialog } from '../../bom-import/ImportBomDialog';
 import { NewBuildDialog, type NewBuildInput } from './NewBuildDialog';
@@ -830,7 +829,7 @@ const HEADERS = [
 
 function ListView({
   rows, expanded, toggle, filtersActive, onOpen, onAddSub, onDeleteRequest, totalCount, formatCurrency,
-  canDecideRow, onApprove, onReject, approvingId,
+  canDecideRow,
 }: {
   rows: BOMNode[];
   expanded: Record<string, boolean>;
@@ -842,9 +841,6 @@ function ListView({
   totalCount: number;
   formatCurrency: (n: number) => string;
   canDecideRow: (nodeId: string) => boolean;
-  onApprove: (node: BOMNode) => void;
-  onReject: (node: BOMNode) => void;
-  approvingId: string | null;
 }) {
   const [hovered, setHovered] = useState<string | null>(null);
   const rowH = 46;
@@ -983,18 +979,16 @@ function ListView({
                 {row.status === 'pending' && canDecideRow(row.id) && (
                   <>
                     <button
-                      onClick={e => { e.stopPropagation(); onApprove(row); }}
-                      disabled={approvingId === row.id}
-                      title="Approve part"
-                      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                      onClick={e => { e.stopPropagation(); onOpen(row.id); }}
+                      title="Review part"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:bg-muted transition-colors"
                     >
                       <Check className="w-3.5 h-3.5" style={{ color: '#16A34A' }} />
                     </button>
                     <button
-                      onClick={e => { e.stopPropagation(); onReject(row); }}
-                      disabled={approvingId === row.id}
-                      title="Reject part"
-                      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
+                      onClick={e => { e.stopPropagation(); onOpen(row.id); }}
+                      title="Review part"
+                      className="inline-flex items-center justify-center w-5 h-5 rounded text-muted-foreground hover:bg-muted transition-colors"
                     >
                       <X className="w-3.5 h-3.5" style={{ color: '#DC2626' }} />
                     </button>
@@ -1330,7 +1324,6 @@ export function BOMView({
     prevAddOpen.current = addOpen;
   }, [addOpen]);
   const [search, setSearch] = useState('');
-  const [rejectTarget, setRejectTarget] = useState<BOMNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BOMNode | null>(null);
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
   const [filterOpen, setFilterOpen] = useState(false);
@@ -1360,7 +1353,6 @@ export function BOMView({
   const createPart = useCreatePart(orgId);
   const updatePart = useUpdatePart();
   const createNode = useCreateBomNode(projectId);
-  const decideApprovalRequest = useDecideApprovalRequest(projectId);
   const deleteBomNode = useDeleteBomNode(projectId);
   const addRequirement = useAddRequirement(projectId);
   const { data: pendingApprovalRequests = [] } = useProjectApprovalRequests(projectId, 'pending');
@@ -1410,34 +1402,6 @@ export function BOMView({
     if (!user) return false;
     return req.approvers.some(a => a.id === user.id);
   }, [isAdmin, user, pendingRequestByNodeId]);
-
-  const handleApprove = async (node: BOMNode) => {
-    const active = pendingRequestByNodeId.get(node.id);
-    if (!active) { toast.error('This part has not been sent for review yet.'); return; }
-    try {
-      await decideApprovalRequest.mutateAsync({ requestId: active.id, nodeId: node.id, decision: 'approved' });
-      toast.success(`${node.pn} approved`);
-    } catch (err) {
-      toast.error('Failed to approve part', {
-        description: err instanceof Error ? err.message : undefined,
-      });
-    }
-  };
-
-  const handleRejectConfirm = async (reason: string, comment?: string) => {
-    if (!rejectTarget) return;
-    const active = pendingRequestByNodeId.get(rejectTarget.id);
-    if (!active) { toast.error('This part has not been sent for review yet.'); return; }
-    try {
-      await decideApprovalRequest.mutateAsync({ requestId: active.id, nodeId: rejectTarget.id, decision: 'rejected', reason, comment });
-      toast.success(`${rejectTarget.pn} rejected`);
-    } catch (err) {
-      toast.error('Failed to reject part', {
-        description: err instanceof Error ? err.message : undefined,
-      });
-      throw err;
-    }
-  };
 
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
@@ -1982,9 +1946,6 @@ export function BOMView({
             totalCount={totalCount}
             formatCurrency={formatCurrency}
             canDecideRow={canDecideRow}
-            onApprove={handleApprove}
-            onReject={setRejectTarget}
-            approvingId={decideApprovalRequest.isPending ? decideApprovalRequest.variables?.nodeId ?? null : null}
           />
           <MobileListView
             rows={listRows}
@@ -2184,14 +2145,6 @@ export function BOMView({
           onImported={expandNodes}
         />
       )}
-
-      {/* Reject confirmation (mandatory reason) */}
-      <BOMRejectDialog
-        open={!!rejectTarget}
-        partLabel={rejectTarget?.pn}
-        onClose={() => setRejectTarget(null)}
-        onConfirm={handleRejectConfirm}
-      />
 
       {/* Delete confirmation (warns about cascading sub-component deletion) */}
       <ConfirmationDialog
