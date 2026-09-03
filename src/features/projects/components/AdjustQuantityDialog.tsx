@@ -742,7 +742,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                               <Label className="text-xs">Part Number *</Label>
                               <Input
                                 value={newPart.partNumber}
-                                onChange={(e) => setNewPart(prev => ({ ...prev, partNumber: e.target.value }))}
+                                onChange={(e) => setNewPart(prev => ({ ...prev, partNumber: e.target.value.toUpperCase() }))}
                                 placeholder="e.g. EV-PWR-099"
                               />
                             </div>
