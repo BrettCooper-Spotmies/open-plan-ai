@@ -2025,7 +2025,7 @@ export function BOMView({
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
             </button>
-            <button
+            {/* <button
               onClick={() => { setAddChoiceOpen(false); setAddImportOpen(true); }}
               className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-foreground/20 transition-colors text-left group"
             >
@@ -2037,7 +2037,7 @@ export function BOMView({
                 <div className="text-xs text-muted-foreground mt-0.5">Bulk-add multiple parts at once from a spreadsheet.</div>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
-            </button>
+            </button> */}
             <button
               onClick={() => { setAddChoiceOpen(false); setAddAiImportOpen(true); }}
               className="flex items-center gap-4 px-4 py-3.5 rounded-xl border border-border bg-card hover:bg-muted/60 hover:border-foreground/20 transition-colors text-left group"
@@ -2046,7 +2046,7 @@ export function BOMView({
                 <Sparkles className="w-4 h-4" />
               </span>
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium text-foreground">Import with AI</div>
+                <div className="text-sm font-medium text-foreground">Import </div>
                 <div className="text-xs text-muted-foreground mt-0.5">Upload a file, review with AI chat, then commit — supports multi-level hierarchies.</div>
               </div>
               <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors shrink-0" />
