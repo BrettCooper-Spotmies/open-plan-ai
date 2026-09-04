@@ -90,6 +90,7 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
                 <span>Type: {row.type === 'other' && row.typeOther ? row.typeOther : ECO_IMPORT_TYPE_LABEL[row.type] ?? row.type}</span>
                 <span>Reason: {row.reason === 'other' && row.reasonOther ? row.reasonOther : ECO_IMPORT_REASON_LABEL[row.reason] ?? row.reason}</span>
                 {row.targetDate && <span>Target: {row.targetDate}</span>}
+                {row.originatingEcr && <span>Ref: {row.originatingEcr}</span>}
               </div>
               {row.issues.length > 0 && (
                 <div

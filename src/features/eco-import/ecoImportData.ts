@@ -66,6 +66,8 @@ export interface ImportRowPreview {
   reasonOther: string | null;
   priority: EcoImportPriority;
   targetDate: string | null;
+  /** The source file's own reference ID for this change (e.g. an "ECO ID" column), if any — stored for traceability, never this ECO's real number. */
+  originatingEcr: string | null;
   issues: string[];
   /** false only when the row is missing its required title (or was explicitly skipped in chat) — every other issue is informational and still imports. */
   importable: boolean;
