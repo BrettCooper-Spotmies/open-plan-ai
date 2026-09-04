@@ -50,7 +50,9 @@ import {
   EyeOff,
   Pencil,
   X,
+  Activity as ActivityIcon,
 } from 'lucide-react';
+import { RecentActivityPanel } from './components/RecentActivityPanel';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrganization } from '@/contexts/OrganizationContext';
@@ -245,7 +247,7 @@ const Settings = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordLoading, setPasswordLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const validTabs = ['general', 'profile', 'notifications', 'appearance', 'danger'] as const;
+  const validTabs = ['general', 'profile', 'notifications', 'activity', 'appearance', 'danger'] as const;
   type SettingsTab = typeof validTabs[number];
   const getTabFromParams = (): SettingsTab => {
     const tab = searchParams.get('tab');
@@ -614,28 +616,34 @@ const Settings = () => {
           }}
           className="space-y-6"
         >
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="general" className="gap-1 px-0 sm:px-3" title="General">
-              <SettingsIcon className="h-4 w-4" />
-              <span className="hidden sm:inline">General</span>
-            </TabsTrigger>
-            <TabsTrigger value="profile" className="gap-1 px-0 sm:px-3" title="Profile">
-              <User className="h-4 w-4" />
-              <span className="hidden sm:inline">Profile</span>
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="gap-1 px-0 sm:px-3" title="Notifications">
-              <Bell className="h-4 w-4" />
-              <span className="hidden sm:inline">Notifications</span>
-            </TabsTrigger>
-            <TabsTrigger value="appearance" className="gap-1 px-0 sm:px-3" title="Appearance">
-              <Palette className="h-4 w-4" />
-              <span className="hidden sm:inline">Appearance</span>
-            </TabsTrigger>
-            <TabsTrigger value="danger" className="gap-1 px-0 sm:px-3 text-destructive data-[state=active]:text-destructive" title="Danger Zone">
-              <ShieldAlert className="h-4 w-4" />
-              <span className="hidden sm:inline">Danger</span>
-            </TabsTrigger>
-          </TabsList>
+          <div className="sticky -top-4 z-20 bg-background -mx-4 px-4 pt-4 pb-3 border-b border-border shadow-sm">
+            <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
+              <TabsTrigger value="general" className="gap-1 px-0 sm:px-3" title="General">
+                <SettingsIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">General</span>
+              </TabsTrigger>
+              <TabsTrigger value="profile" className="gap-1 px-0 sm:px-3" title="Profile">
+                <User className="h-4 w-4" />
+                <span className="hidden sm:inline">Profile</span>
+              </TabsTrigger>
+              <TabsTrigger value="notifications" className="gap-1 px-0 sm:px-3" title="Notifications">
+                <Bell className="h-4 w-4" />
+                <span className="hidden sm:inline">Notifications</span>
+              </TabsTrigger>
+              <TabsTrigger value="activity" className="gap-1 px-0 sm:px-3" title="Activity">
+                <ActivityIcon className="h-4 w-4" />
+                <span className="hidden sm:inline">Activity</span>
+              </TabsTrigger>
+              <TabsTrigger value="appearance" className="gap-1 px-0 sm:px-3" title="Appearance">
+                <Palette className="h-4 w-4" />
+                <span className="hidden sm:inline">Appearance</span>
+              </TabsTrigger>
+              <TabsTrigger value="danger" className="gap-1 px-0 sm:px-3 text-destructive data-[state=active]:text-destructive" title="Danger Zone">
+                <ShieldAlert className="h-4 w-4" />
+                <span className="hidden sm:inline">Danger</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* General Tab */}
           <TabsContent value="general">
@@ -1224,6 +1232,11 @@ const Settings = () => {
                 </Button>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          {/* Activity Tab */}
+          <TabsContent value="activity">
+            <RecentActivityPanel />
           </TabsContent>
 
           {/* Appearance Tab */}
