@@ -622,9 +622,26 @@ export function BOMDetailScreenMobile({
             <SpecField label="Part Name">{node.name}</SpecField>
             <SpecField label="MPN" mono>{node.mpn}</SpecField>
             <SpecField label="Manufacturer">{node.manufacturer}</SpecField>
-            <SpecField label="Supplier">{node.distributor}</SpecField>
+            {Array.isArray(node.suppliers) && node.suppliers.length > 0 ? (
+              node.suppliers.map((s, i) => (
+                <SpecField
+                  key={i}
+                  label={node.suppliers.length > 1 ? `Supplier ${i + 1}` : 'Supplier'}
+                >
+                  {(s.distributor || '—')}
+                  {' · '}
+                  {s.calcFromSubparts
+                    ? 'Calc. from sub-parts'
+                    : formatPrice(parseFloat(s.price) || 0, formatCurrency)}
+                </SpecField>
+              ))
+            ) : (
+              <>
+                <SpecField label="Supplier">{node.distributor}</SpecField>
+                <SpecField label="Unit Price">{formatPrice(node.price, formatCurrency)}</SpecField>
+              </>
+            )}
             <SpecField label="Quantity">{node.qty} {node.uom}</SpecField>
-            <SpecField label="Unit Price">{formatPrice(node.price, formatCurrency)}</SpecField>
             <SpecField label="Lead Time">{formatLeadTime(node.leadTime)}</SpecField>
             <SpecField label="BOM Level">{node.levelLabel ?? node.level}</SpecField>
             <SpecField label="Handled By"><PersonTag name={node.owner} /></SpecField>
