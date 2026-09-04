@@ -93,10 +93,22 @@ const statusOrder: Record<string, number> = {
   'wont-fix': 5,
 };
 
-type SortField = 'title' | 'type' | 'status' | 'priority' | 'project' | 'dueDate';
+type SortField = 'title' | 'type' | 'status' | 'priority' | 'project' | 'dueDate' | 'reportedDate' | 'completedDate';
 type SortDirection = 'asc' | 'desc';
 
 const DESKTOP_PAGE_SIZE = 10;
+
+function getReportedDate(task: MyDayItem): string | undefined {
+  return task.itemType === 'task' ? task.originalTask?.createdAt : task.originalIssue?.reportedAt;
+}
+
+function getCompletedDate(task: MyDayItem): string | null | undefined {
+  return task.itemType === 'task' ? task.originalTask?.completedAt : task.originalIssue?.resolvedAt;
+}
+
+function getTags(task: MyDayItem): string[] {
+  return (task.itemType === 'task' ? task.originalTask?.tags : task.originalIssue?.tags) ?? [];
+}
 
 export function MyDayListView({
   tasks,
@@ -193,6 +205,22 @@ export function MyDayListView({
         case 'dueDate': {
           const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
           const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+          comparison = aTime - bTime;
+          break;
+        }
+        case 'reportedDate': {
+          const aDate = getReportedDate(a);
+          const bDate = getReportedDate(b);
+          const aTime = aDate ? new Date(aDate).getTime() : Infinity;
+          const bTime = bDate ? new Date(bDate).getTime() : Infinity;
+          comparison = aTime - bTime;
+          break;
+        }
+        case 'completedDate': {
+          const aDate = getCompletedDate(a);
+          const bDate = getCompletedDate(b);
+          const aTime = aDate ? new Date(aDate).getTime() : Infinity;
+          const bTime = bDate ? new Date(bDate).getTime() : Infinity;
           comparison = aTime - bTime;
           break;
         }
@@ -374,13 +402,16 @@ export function MyDayListView({
             {/* <TableHead>Module</TableHead> */}
             <SortableHead field="project">Project</SortableHead>
             <TableHead className="sticky top-0 z-10 bg-background border-b shadow-xs">Assigned By</TableHead>
+            <TableHead className="sticky top-0 z-10 bg-background border-b shadow-xs">Tags</TableHead>
+            <SortableHead field="reportedDate">Reported Date</SortableHead>
             <SortableHead field="dueDate">Due Date</SortableHead>
+            <SortableHead field="completedDate">Completed Date</SortableHead>
           </TableRow>
         </TableHeader>
         <TableBody className="h-full">
           {paginatedTasks.length === 0 ? (
             <TableRow className="hover:bg-transparent h-full">
-              <TableCell colSpan={7} className="text-center py-20 align-middle text-muted-foreground font-medium h-full">
+              <TableCell colSpan={10} className="text-center py-20 align-middle text-muted-foreground font-medium h-full">
                 {emptyMessage}
               </TableCell>
             </TableRow>
@@ -495,6 +526,35 @@ export function MyDayListView({
                 })()}
               </TableCell>
               <TableCell>
+                {(() => {
+                  const tags = getTags(task);
+                  return tags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 max-w-[160px]">
+                      {tags.slice(0, 3).map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0 font-normal">
+                          {tag}
+                        </Badge>
+                      ))}
+                      {tags.length > 3 && (
+                        <span className="text-xs text-muted-foreground">+{tags.length - 3}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  );
+                })()}
+              </TableCell>
+              <TableCell>
+                {(() => {
+                  const reportedDate = getReportedDate(task);
+                  return reportedDate ? (
+                    <span className="text-sm">{format(new Date(reportedDate), 'dd/MM/yyyy')}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  );
+                })()}
+              </TableCell>
+              <TableCell>
                 {task.dueDate ? (
                   <span className="text-sm">
                     {format(new Date(task.dueDate), 'dd/MM/yyyy')}
@@ -502,6 +562,16 @@ export function MyDayListView({
                 ) : (
                   <span className="text-muted-foreground text-sm">No date</span>
                 )}
+              </TableCell>
+              <TableCell>
+                {(() => {
+                  const completedDate = getCompletedDate(task);
+                  return completedDate ? (
+                    <span className="text-sm">{format(new Date(completedDate), 'dd/MM/yyyy')}</span>
+                  ) : (
+                    <span className="text-muted-foreground text-sm">—</span>
+                  );
+                })()}
               </TableCell>
             </TableRow>
           ))}

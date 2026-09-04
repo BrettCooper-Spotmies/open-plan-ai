@@ -49,6 +49,7 @@ const dueDateOptions = [
   { value: 'today', label: 'Due Today' },
   { value: 'upcoming', label: 'Upcoming' },
   { value: 'no-date', label: 'No Date' },
+  { value: 'custom', label: 'Custom' },
 ];
 
 export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, className }: MyTasksFiltersDropdownProps) {
@@ -95,8 +96,10 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
   }, [filters]);
 
   const [open, setOpen] = useState(false);
+  const [showCustomDueDate, setShowCustomDueDate] = useState(!!filters.dueDateCustom);
   const clearAll = () => {
     onFiltersChange({});
+    setShowCustomDueDate(false);
     setOpen(false);
   };
 
@@ -209,41 +212,51 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
               <CalendarClock className="h-3 w-3" />
               Due Date
             </Label>
-            <div className="flex items-center gap-1">
-              <Select
-                value={filters.dueDate || 'all'}
-                onValueChange={(value) =>
+            <Select
+              value={showCustomDueDate ? 'custom' : (filters.dueDate || 'all')}
+              onValueChange={(value) => {
+                if (value === 'custom') {
+                  setShowCustomDueDate(true);
+                  onFiltersChange({ ...filters, dueDate: undefined });
+                } else {
+                  setShowCustomDueDate(false);
                   onFiltersChange({
                     ...filters,
                     dueDate: value === 'all' ? undefined : (value as MyTasksColumnFilters['dueDate']),
                     dueDateCustom: undefined,
-                  })
+                  });
                 }
-              >
-                <SelectTrigger className="h-9 flex-1">
-                  <SelectValue placeholder="Any Date" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Any Date</SelectItem>
-                  {dueDateOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              }}
+            >
+              <SelectTrigger className="h-9 w-full">
+                <SelectValue placeholder="Any Date" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Any Date</SelectItem>
+                {dueDateOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {showCustomDueDate && (
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     type="button"
-                    variant={filters.dueDateCustom ? 'secondary' : 'outline'}
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
+                    variant="outline"
+                    className="h-9 w-full justify-start gap-2 text-left font-normal"
                   >
-                    <CalendarIcon className="h-3.5 w-3.5" />
+                    <CalendarIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    {filters.dueDateCustom ? (
+                      <span className="truncate">{format(new Date(filters.dueDateCustom), 'PPP')}</span>
+                    ) : (
+                      <span className="truncate text-muted-foreground">Pick a date</span>
+                    )}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
+                <PopoverContent className="w-auto p-0" align="start">
                   <CalendarPicker
                     mode="single"
                     selected={filters.dueDateCustom ? new Date(filters.dueDateCustom) : undefined}
@@ -251,26 +264,12 @@ export function MyTasksFiltersDropdown({ items, filters, onFiltersChange, classN
                       onFiltersChange({
                         ...filters,
                         dueDateCustom: date ? format(date, 'yyyy-MM-dd') : undefined,
-                        dueDate: date ? undefined : filters.dueDate,
+                        dueDate: undefined,
                       })
                     }
                   />
                 </PopoverContent>
               </Popover>
-            </div>
-            {filters.dueDateCustom && (
-              <div className="flex items-center justify-between pl-1">
-                <span className="text-xs text-muted-foreground">{format(new Date(filters.dueDateCustom), 'PPP')}</span>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-5 px-1.5 text-xs"
-                  onClick={() => onFiltersChange({ ...filters, dueDateCustom: undefined })}
-                >
-                  Clear
-                </Button>
-              </div>
             )}
           </div>
         </div>
