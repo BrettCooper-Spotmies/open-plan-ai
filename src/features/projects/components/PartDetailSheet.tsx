@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import {
-  Download, ShoppingCart, Pencil, ArrowLeftRight, ClipboardCheck, MapPin, ChevronLeft, ChevronRight, Clock,
+  Download, ShoppingCart, Pencil, ArrowLeftRight, ClipboardCheck, MapPin, ChevronRight, Clock,
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag, Unlock, ShieldAlert, type LucideIcon,
 } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -131,7 +131,7 @@ function Field({
 }: { label: string; mono?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <div className="mb-1 text-[10.5px] uppercase tracking-wider text-muted-foreground/70" title={hint}>{label}</div>
+      <div className="mb-1 text-[10.5px] uppercase tracking-wider text-muted-foreground" title={hint}>{label}</div>
       <div className={cn('truncate text-sm font-medium text-foreground', mono && 'font-mono')}>{children}</div>
     </div>
   );
@@ -323,42 +323,40 @@ export function PartDetailSheet({
         <DialogTitle className="sr-only">{record.pn} — {record.name}</DialogTitle>
 
         {/* Breadcrumb */}
-        <div className="flex shrink-0 items-center gap-1.5 border-b px-4 py-2.5 text-xs text-muted-foreground sm:px-6">
-          <button
-            type="button"
+        <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-6 pt-3 m-2 text-xs text-muted-foreground">
+          <span
+            className="cursor-pointer transition-colors hover:text-foreground"
             onClick={onClose}
-            className="flex items-center gap-1 rounded transition-colors hover:text-foreground"
-            aria-label="Back to inventory"
           >
-            <ChevronLeft className="h-3.5 w-3.5" /> Inventory
-          </button>
+            Inventory
+          </span>
           <ChevronRight className="h-3 w-3" />
-          <span className="truncate font-medium text-foreground">{record.pn}</span>
+          <span className="truncate font-mono font-medium text-foreground">{record.pn}</span>
         </div>
 
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
-          <div className="mx-auto w-full max-w-6xl px-4 pb-10 sm:px-6">
+          <div className="w-full px-6 pb-8">
 
             {/* Part header */}
-            <div className="flex flex-wrap items-start justify-between gap-4 py-4">
-              <div className="flex min-w-0 gap-3">
+            <div className="flex flex-wrap items-start justify-between gap-5 pb-4">
+              <div className="flex min-w-0 items-start gap-4">
                 {record.imageUrl ? (
-                  <img src={record.imageUrl} alt="" className="h-14 w-14 shrink-0 rounded-xl border object-cover" />
+                  <img src={record.imageUrl} alt="" className="h-16 w-16 shrink-0 rounded-xl border object-cover" />
                 ) : (
                   <div
-                    className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl"
+                    className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl"
                     style={{ background: `${meta.tint}1a`, color: meta.tint }}
                   >
                     <CategoryIcon className="h-6 w-6" />
                   </div>
                 )}
                 <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="mb-1 flex flex-wrap items-center gap-2.5">
                     <h1 className="truncate text-xl font-semibold text-foreground">{record.name}</h1>
                     <CoveragePill status={status} />
                   </div>
-                  <div className="mt-0.5 font-mono text-xs text-muted-foreground">{record.pn}</div>
-                  <div className="mt-1 inline-flex items-center gap-1.5 text-sm" style={{ color: meta.tint }}>
+                  <div className="mb-1 font-mono text-xs text-muted-foreground">{record.pn}</div>
+                  <div className="inline-flex items-center gap-1.5 text-sm" style={{ color: meta.tint }}>
                     <span className="inline-block h-2 w-2 rounded-sm" style={{ background: meta.tint }} />
                     {meta.label}
                   </div>
@@ -379,7 +377,7 @@ export function PartDetailSheet({
             {/* Facts strip */}
             <div
               className="mb-5 grid gap-4 rounded-xl border bg-card px-4 py-3.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(116px, 1fr))' }}
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}
             >
               <Field label="On Hand" hint={FIELD_TOOLTIPS['On Hand']}>{record.onHand} {unit}</Field>
               <Field label="Allocated" hint={FIELD_TOOLTIPS['Allocated']}>{record.allocated}</Field>
@@ -401,7 +399,7 @@ export function PartDetailSheet({
             </div>
 
             {/* Two-column body */}
-            <div className="grid gap-4 lg:[grid-template-columns:minmax(0,1.6fr)_minmax(0,1fr)]">
+            <div className="grid gap-4 lg:[grid-template-columns:minmax(0,1.7fr)_minmax(0,1fr)]">
               <div className="flex min-w-0 flex-col gap-4">
 
           {(record.imageUrl || part?.description) && (

@@ -1102,16 +1102,14 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   </Card>
                 )}
 
-                {/* Requirements traceability */}
-                <Card title="Requirements Traceability">
-                  {node.req.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No requirements linked to this part.</p>
-                  ) : (
+                {/* Requirements traceability — hidden when nothing is linked */}
+                {node.req.length > 0 && (
+                  <Card title="Requirements Traceability">
                     <div className="flex gap-2 flex-wrap">
                       {node.req.map(r => <ReqTag key={r} label={r} />)}
                     </div>
-                  )}
-                </Card>
+                  </Card>
+                )}
 
                 {/* Notes */}
                 <NotesCard nodeId={node.id} currentUserId={user?.id} currentUserName={user?.name} currentUserInitials={user?.initials} />
@@ -1309,7 +1307,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   )}
                 </Card>
 
-                {/* Hierarchy */}
+                {/* Hierarchy — hidden for a standalone part with no parent chain */}
+                {path.length > 1 && (
                 <Card title="Hierarchy">
                   <div className="flex flex-col">
                     {path.map((p, i) => {
@@ -1333,11 +1332,14 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     })}
                   </div>
                 </Card>
+                )}
 
                 {/* Documents */}
                 <BOMDocuments nodeId={originalNode.id} />
 
-                {/* Engineering Changes referencing this part */}
+                {/* Engineering Changes referencing this part — hidden when none
+                    and not loading, to save vertical space */}
+                {(relatedEcosLoading || relatedEcos.length > 0) && (
                 <Card
                   title="Engineering Changes"
                   action={relatedEcos.length > 0 && (
@@ -1349,10 +1351,6 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     <div className="p-4 flex flex-col gap-2">
                       <Skeleton className="h-9 w-full rounded-lg" />
                       <Skeleton className="h-9 w-full rounded-lg" />
-                    </div>
-                  ) : relatedEcos.length === 0 ? (
-                    <div className="p-4 text-xs text-muted-foreground text-center">
-                      No ECOs reference this part yet
                     </div>
                   ) : (
                     <div className="flex flex-col divide-y divide-border">
@@ -1380,6 +1378,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     </div>
                   )}
                 </Card>
+                )}
               </div>
             </div>
           </div>

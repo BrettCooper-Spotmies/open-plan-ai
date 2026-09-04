@@ -741,15 +741,13 @@ export function BOMDetailScreenMobile({
               </Section>
             )}
 
-            <Section label="Requirements Traceability">
-              {node.req.length === 0 ? (
-                <p className="text-sm text-muted-foreground px-4 py-3.5">No requirements linked to this part.</p>
-              ) : (
+            {node.req.length > 0 && (
+              <Section label="Requirements Traceability">
                 <div className="flex flex-wrap gap-2 px-4 py-3.5">
                   {node.req.map(r => <ReqTag key={r} label={r} />)}
                 </div>
-              )}
-            </Section>
+              </Section>
+            )}
 
             <NotesSection nodeId={node.id} currentUserId={currentUserId} />
           </>
@@ -825,6 +823,7 @@ export function BOMDetailScreenMobile({
               )}
             </Section>
 
+            {path.length > 1 && (
             <Section label="Hierarchy">
               <div className="flex flex-wrap items-center gap-1.5 px-4 py-3.5">
                 {path.map((p, i) => {
@@ -846,6 +845,7 @@ export function BOMDetailScreenMobile({
                 })}
               </div>
             </Section>
+            )}
 
             <DocumentsSection nodeId={node.id} />
           </>
