@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Issue, IssueStatus, IssueSeverity, IssueCategory, Task, TeamMember } from '@/types';
@@ -239,6 +239,14 @@ export function IssuesView({
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [selectedMobileStatus, setSelectedMobileStatus] = useState<string>('all');
+  // The table body scrolls inside its own fixed-height box (see max-h-[calc(100vh-320px)]
+  // below) independent of the page scroll — without this, paging kept whatever
+  // scroll position was left inside that box, so a new page could open already
+  // scrolled past its first rows.
+  const tableScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    tableScrollRef.current?.scrollTo({ top: 0 });
+  }, [currentPage]);
 
   // Sync columns from API
   useEffect(() => {
@@ -1268,7 +1276,7 @@ export function IssuesView({
         </div>
       ) : (
         <div className="rounded-lg border">
-          <div className="max-h-[calc(100vh-320px)] min-h-[240px] overflow-y-auto">
+          <div ref={tableScrollRef} className="max-h-[calc(100vh-320px)] min-h-[240px] overflow-y-auto">
             <Table containerClassName="relative w-full overflow-visible">
               <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">
                 <TableRow className="bg-background">
