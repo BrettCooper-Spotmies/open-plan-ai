@@ -303,7 +303,19 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialPartId, pickerParts]);
 
-  const isFormDirty = form.formState.isDirty || showAddPart || images.length > 0;
+  // Merely opening the "Add new part" panel isn't an unsaved change — only count it
+  // dirty once the user has actually typed something into one of its fields.
+  const isNewPartDirty =
+    showAddPart &&
+    (newPart.partNumber.trim() !== '' ||
+      newPart.name.trim() !== '' ||
+      newPart.description.trim() !== '' ||
+      newPart.category !== '' ||
+      newPart.manufacturer.trim() !== '' ||
+      newPart.mpn.trim() !== '' ||
+      newPart.unit !== 'EA');
+
+  const isFormDirty = form.formState.isDirty || isNewPartDirty || images.length > 0;
 
   const applyImageFiles = (files: File[]) => {
     const valid = files.filter((f) => f.type.startsWith('image/'));
