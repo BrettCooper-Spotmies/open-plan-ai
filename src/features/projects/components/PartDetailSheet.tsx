@@ -640,21 +640,21 @@ export function PartDetailSheet({
                   </div>
                 )}
                 {o.note && (
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-muted-foreground shrink-0">Notes</span>
-                    <span className="font-medium text-right">{o.note}</span>
+                  <div className="space-y-0.5 pt-1">
+                    <span className="text-muted-foreground">Notes</span>
+                    <p className="font-medium whitespace-pre-wrap break-words">{o.note}</p>
                   </div>
                 )}
                 {o.description && (
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-muted-foreground shrink-0">Description</span>
-                    <span className="font-medium text-right">{o.description}</span>
+                  <div className="space-y-0.5 pt-1">
+                    <span className="text-muted-foreground">Description</span>
+                    <p className="font-medium whitespace-pre-wrap break-words">{o.description}</p>
                   </div>
                 )}
                 {o.purpose && (
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-muted-foreground shrink-0">Purpose</span>
-                    <span className="font-medium text-right">{o.purpose}</span>
+                  <div className="space-y-0.5 pt-1">
+                    <span className="text-muted-foreground">Purpose</span>
+                    <p className="font-medium whitespace-pre-wrap break-words">{o.purpose}</p>
                   </div>
                 )}
                 {o.status === 'partially_received' && (
