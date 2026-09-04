@@ -590,9 +590,9 @@ export function PartDetailSheet({
             {partOrders.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">Nothing on order.</p>
             ) : partOrders.map((o) => (
-              <div key={o.id} className="rounded-lg border bg-background p-3 space-y-2 text-sm">
+              <div key={o.id} className="rounded-lg border bg-background p-3 text-sm">
                 {o.status === 'planned' && (
-                  <div className="flex items-center justify-between gap-2">
+                  <div className="mb-2.5 flex items-center justify-between gap-2">
                     <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600">
                       <Clock className="h-3 w-3" /> Want to order
                     </span>
@@ -601,64 +601,68 @@ export function PartDetailSheet({
                     </Button>
                   </div>
                 )}
-                <div className="flex items-center justify-between">
+                <div className="grid grid-cols-[max-content_1fr] items-baseline gap-x-4 gap-y-1.5">
                   <span className="text-muted-foreground">Remaining</span>
-                  <span className="font-semibold">{o.remainingQty} {unit}</span>
-                </div>
-                <div className="flex items-center justify-between">
+                  <span className="text-right font-semibold">{o.remainingQty} {unit}</span>
+
                   <span className="text-muted-foreground">Expected</span>
-                  <span className="font-medium">{formatShortDate(o.expectedDate)}</span>
+                  <span className="text-right font-medium">{formatShortDate(o.expectedDate)}</span>
+
+                  {o.leadTimeDays !== undefined && o.leadTimeDays !== null && o.leadTimeDays > 0 && (
+                    <>
+                      <span className="text-muted-foreground">Lead time</span>
+                      <span className="text-right font-medium">{formatLeadTime(o.leadTimeDays)}</span>
+                    </>
+                  )}
+                  {record.leadTimeDays > 0 && (
+                    <>
+                      <span className="text-muted-foreground">Part lead time</span>
+                      <span className="text-right font-medium">{formatLeadTime(record.leadTimeDays)}</span>
+                    </>
+                  )}
+                  {o.supplierRef && (
+                    <>
+                      <span className="text-muted-foreground">Supplier / PO</span>
+                      <span className="text-right font-medium">{o.supplierRef}</span>
+                    </>
+                  )}
+                  {o.lotNumber && (
+                    <>
+                      <span className="text-muted-foreground">Lot number</span>
+                      <span className="text-right font-medium">{o.lotNumber}</span>
+                    </>
+                  )}
+                  {o.serialNumber && (
+                    <>
+                      <span className="text-muted-foreground">Serial number</span>
+                      <span className="truncate text-right font-medium" title={o.serialNumber}>{o.serialNumber}</span>
+                    </>
+                  )}
                 </div>
-                {o.leadTimeDays !== undefined && o.leadTimeDays !== null && o.leadTimeDays > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Lead time</span>
-                    <span className="font-medium">{formatLeadTime(o.leadTimeDays)}</span>
-                  </div>
-                )}
-                {record.leadTimeDays > 0 && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Part lead time</span>
-                    <span className="font-medium">{formatLeadTime(record.leadTimeDays)}</span>
-                  </div>
-                )}
-                {o.supplierRef && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Supplier / PO</span>
-                    <span className="font-medium">{o.supplierRef}</span>
-                  </div>
-                )}
-                {o.lotNumber && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Lot number</span>
-                    <span className="font-medium">{o.lotNumber}</span>
-                  </div>
-                )}
-                {o.serialNumber && (
-                  <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Serial number</span>
-                    <span className="font-medium truncate max-w-[60%]" title={o.serialNumber}>{o.serialNumber}</span>
-                  </div>
-                )}
-                {o.note && (
-                  <div className="space-y-0.5 pt-1">
-                    <span className="text-muted-foreground">Notes</span>
-                    <p className="font-medium whitespace-pre-wrap break-words">{o.note}</p>
-                  </div>
-                )}
-                {o.description && (
-                  <div className="space-y-0.5 pt-1">
-                    <span className="text-muted-foreground">Description</span>
-                    <p className="font-medium whitespace-pre-wrap break-words">{o.description}</p>
-                  </div>
-                )}
-                {o.purpose && (
-                  <div className="space-y-0.5 pt-1">
-                    <span className="text-muted-foreground">Purpose</span>
-                    <p className="font-medium whitespace-pre-wrap break-words">{o.purpose}</p>
+                {(o.note || o.description || o.purpose) && (
+                  <div className="mt-3 space-y-2.5 border-t pt-3">
+                    {o.note && (
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Notes</p>
+                        <p className="whitespace-pre-wrap break-words">{o.note}</p>
+                      </div>
+                    )}
+                    {o.description && (
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Description</p>
+                        <p className="whitespace-pre-wrap break-words">{o.description}</p>
+                      </div>
+                    )}
+                    {o.purpose && (
+                      <div className="space-y-0.5">
+                        <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60">Purpose</p>
+                        <p className="whitespace-pre-wrap break-words">{o.purpose}</p>
+                      </div>
+                    )}
                   </div>
                 )}
                 {o.status === 'partially_received' && (
-                  <div className="text-xs text-muted-foreground">Partially received — {o.quantity - o.remainingQty} of {o.quantity} so far</div>
+                  <div className="mt-2 text-xs text-muted-foreground">Partially received — {o.quantity - o.remainingQty} of {o.quantity} so far</div>
                 )}
               </div>
             ))}
