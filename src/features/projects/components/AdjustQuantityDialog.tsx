@@ -159,6 +159,10 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   const [isDraggingImage, setIsDraggingImage] = useState(false);
   const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  // Guards against a double-click / double Enter posting the transaction twice: the async
+  // form validation lets a second submit slip in before the dialog's close re-renders.
+  // Reset in resetAndClose() so a reopened dialog can submit again.
+  const isSubmittingRef = useRef(false);
 
   const createPart = useCreatePart(orgId);
   const updatePart = useUpdatePart();
@@ -441,6 +445,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
     setCreatedPart(null);
     clearImages();
     handleCloseCamera();
+    isSubmittingRef.current = false;
     onClose();
   };
 
@@ -484,6 +489,11 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
   };
 
   const handleSubmit = async (data: AdjustFormData) => {
+    // A rapid second click resolves its own validation pass before resetAndClose() unmounts
+    // the form — without this guard both passes reach onAdjust and the delta is posted twice.
+    if (isSubmittingRef.current) return;
+    isSubmittingRef.current = true;
+
     const part = selectedRecord
       ? { partId: selectedRecord.partId, pn: selectedRecord.pn, name: selectedRecord.name, cat: selectedRecord.cat }
       : createdPart
@@ -492,6 +502,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
 
     if (!part) {
       toast.error('Select a part to adjust');
+      isSubmittingRef.current = false;
       return;
     }
 
@@ -1273,7 +1284,7 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
               )}
               <div className="flex flex-row justify-end gap-2">
                 <Button type="button" variant="outline" className="flex-1" onClick={attemptClose}>Cancel</Button>
-                <Button type="submit" className="flex-1">
+                <Button type="submit" className="flex-1" disabled={form.formState.isSubmitting}>
                   {stockStatus === 'place_order'
                     ? (orderStatus === 'planned' ? 'Save planned order' : 'Place order')
                     : initialPartId ? 'Save adjustment' : 'Add to inventory'}
