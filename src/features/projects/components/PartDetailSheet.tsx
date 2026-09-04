@@ -1,9 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Download, ShoppingCart, Pencil, ArrowLeftRight, ClipboardCheck, MapPin, ChevronRight, Clock,
   Zap, Cpu, Package, Box, Monitor, Shield, Layers, Tag, Unlock, ShieldAlert, type LucideIcon,
 } from 'lucide-react';
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -170,6 +169,15 @@ export function PartDetailSheet({
   const [releaseQty, setReleaseQty] = useState('');
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
+  // Close on Escape — the panel is a plain in-page overlay now (not a Dialog), so it
+  // has to wire this up itself.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
+
   const memberNameById = useMemo(() => {
     const map = new Map<string, string>();
     members.forEach(m => map.set(m.id, m.name));
@@ -219,7 +227,7 @@ export function PartDetailSheet({
     [partOrders]
   );
 
-  if (!record) return null;
+  if (!isOpen || !record) return null;
 
   const handleRelease = () => {
     const qty = Math.min(Number(releaseQty) || 0, record.quarantineQty ?? 0);
@@ -312,15 +320,15 @@ export function PartDetailSheet({
   ) : null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent
-        hideClose
-        className={cn(
-          'p-0 overflow-hidden gap-0 flex flex-col',
-          'inset-0 left-0 top-0 translate-x-0 translate-y-0 w-screen h-[100dvh] max-w-none max-h-none rounded-none sm:rounded-none border-0 bg-background',
-        )}
+    <>
+      {/* In-page panel — fills the inventory content area, leaving the app sidebar and
+          header visible (mirrors how the BOM part detail opens inside its tab). The parent
+          container is `relative` so this `absolute inset-0` is scoped to that region. */}
+      <div
+        role="dialog"
+        aria-label={`${record.pn} — ${record.name}`}
+        className="absolute inset-0 z-30 flex flex-col overflow-hidden bg-background"
       >
-        <DialogTitle className="sr-only">{record.pn} — {record.name}</DialogTitle>
 
         {/* Breadcrumb */}
         <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-6 pt-3 m-2 text-xs text-muted-foreground">
@@ -660,9 +668,9 @@ export function PartDetailSheet({
             </div>
           </div>
         </div>
-      </DialogContent>
+      </div>
 
       {lightboxSrc && <ImageViewerModal src={lightboxSrc} onClose={() => setLightboxSrc(null)} />}
-    </Dialog>
+    </>
   );
 }

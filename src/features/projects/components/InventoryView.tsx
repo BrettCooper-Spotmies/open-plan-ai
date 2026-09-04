@@ -604,7 +604,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   return (
-    <div className="h-full min-h-0 flex flex-col px-4 md:px-6 pt-4 pb-4">
+    <div className="relative h-full min-h-0 flex flex-col px-4 md:px-6 pt-4 pb-4">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 min-h-0 flex flex-col">
         {/* Toolbar/stat-cards/tabs plus, within the Stock tab, the search/filter/category-chip
             row are one `shrink-0` block outside the scrolling region below, so they stay
