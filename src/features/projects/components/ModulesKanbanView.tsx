@@ -54,7 +54,7 @@ export function ModulesKanbanView({ modules, onModuleClick }: ModulesKanbanViewP
             {/* Header */}
             <div className="flex items-start justify-between gap-2 mb-3 min-w-0">
               <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-                <div 
+                <div
                   className="w-3 h-3 rounded-full shrink-0"
                   style={{ backgroundColor: moduleColor }}
                 />

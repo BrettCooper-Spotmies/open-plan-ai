@@ -48,14 +48,14 @@ export function ModulesListView({ modules, onModuleClick }: ModulesListViewProps
             const isComplete = module.progress === 100;
 
             return (
-              <TableRow 
-                key={module.id} 
+              <TableRow
+                key={module.id}
                 className="cursor-pointer hover:bg-muted/50"
                 onClick={() => onModuleClick?.(module)}
               >
                 <TableCell>
                   <div className="flex items-center gap-3">
-                    <div 
+                    <div
                       className="w-2.5 h-2.5 rounded-full shrink-0"
                       style={{ backgroundColor: moduleColor }}
                     />
