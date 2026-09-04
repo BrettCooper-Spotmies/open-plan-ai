@@ -906,62 +906,87 @@ const Settings = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="flex flex-col sm:flex-row items-center sm:items-center gap-4 sm:gap-6">
-                    <Avatar
-                      className={cn(
-                        'h-20 w-20 shrink-0',
-                        (localAvatarPreview || profile?.avatarUrl) && 'cursor-pointer'
-                      )}
-                      onClick={() => {
-                        if (localAvatarPreview || (!pendingAvatarRemoval && profile?.avatarUrl)) {
-                          setIsAvatarPreviewOpen(true);
-                        }
-                      }}
-                    >
-                      {avatarLoading && !localAvatarPreview && !pendingAvatarRemoval ? (
-                        <AvatarFallback className="bg-primary/10">
-                          <Loader2 className="h-6 w-6 animate-spin" />
-                        </AvatarFallback>
-                      ) : localAvatarPreview || (!pendingAvatarRemoval && profile?.avatarUrl) ? (
-                        <AvatarImage
-                          src={localAvatarPreview || (!pendingAvatarRemoval ? resolveFileUrl(profile?.avatarUrl) || '' : '')}
-                          alt={profile?.name || 'Avatar'}
-                        />
-                      ) : (
-                        <AvatarFallback className="bg-primary/10 text-primary text-2xl">
-                          {profileForm.initials || profile?.name?.slice(0, 2).toUpperCase() || 'U'}
-                        </AvatarFallback>
-                      )}
-                    </Avatar>
-                    <div className="space-y-2">
-                      <input
-                        type="file"
-                        ref={fileInputRef}
-                        className="hidden"
-                      accept="image/png, image/jpeg, image/webp"
-                        onChange={handleAvatarChange}
-                      />
-                      <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-                        <Button variant="outline" size="sm" onClick={handleAvatarClick} disabled={avatarLoading}>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Change Avatar
-                        </Button>
-                        {(profile?.avatarUrl || localAvatarPreview || pendingAvatarRemoval) && (
-                          <Button variant="outline" size="sm" onClick={handleRemoveAvatar} disabled={avatarLoading}>
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Remove
-                          </Button>
-                        )}
+                  {(() => {
+                    const avatarSrc = pendingAvatarRemoval
+                      ? null
+                      : localAvatarPreview || (profile?.avatarUrl ? resolveFileUrl(profile.avatarUrl) || profile.avatarUrl : null);
+
+                    const fallbackInitials =
+                      profileForm.initials ||
+                      (profileForm.name || profile?.name || '')
+                        .trim()
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .map(n => n[0])
+                        .join('')
+                        .toUpperCase()
+                        .slice(0, 2) ||
+                      profile?.email?.[0]?.toUpperCase() ||
+                      'U';
+
+                    return (
+                      <div className="flex flex-col sm:flex-row items-center sm:items-center gap-4 sm:gap-6">
+                        <Avatar
+                          key={avatarSrc || 'no-avatar'}
+                          className={cn(
+                            'h-20 w-20 shrink-0 border border-border/40 shadow-sm',
+                            avatarSrc && 'cursor-pointer'
+                          )}
+                          onClick={() => {
+                            if (avatarSrc) {
+                              setIsAvatarPreviewOpen(true);
+                            }
+                          }}
+                        >
+                          {avatarLoading ? (
+                            <AvatarFallback className="bg-primary/10">
+                              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                            </AvatarFallback>
+                          ) : (
+                            <>
+                              {avatarSrc && (
+                                <AvatarImage
+                                  src={avatarSrc}
+                                  alt={profileForm.name || profile?.name || 'Avatar'}
+                                />
+                              )}
+                              <AvatarFallback className="bg-primary/10 text-primary text-2xl font-semibold select-none">
+                                {fallbackInitials}
+                              </AvatarFallback>
+                            </>
+                          )}
+                        </Avatar>
+                        <div className="space-y-2">
+                          <input
+                            type="file"
+                            ref={fileInputRef}
+                            className="hidden"
+                            accept="image/png, image/jpeg, image/webp"
+                            onChange={handleAvatarChange}
+                          />
+                          <div className="flex flex-wrap justify-center sm:justify-start gap-2">
+                            <Button variant="outline" size="sm" onClick={handleAvatarClick} disabled={avatarLoading}>
+                              <Upload className="h-4 w-4 mr-2" />
+                              Change Avatar
+                            </Button>
+                            {avatarSrc && (
+                              <Button variant="outline" size="sm" onClick={handleRemoveAvatar} disabled={avatarLoading}>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remove
+                              </Button>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            {pendingAvatarFile
+                              ? 'Click Save Profile to apply your new picture.'
+                              : pendingAvatarRemoval
+                                ? 'Click Save Profile to remove your current picture.'
+                                : 'JPG, PNG or GIF. Max 5MB.'}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {pendingAvatarFile
-                          ? 'Click Save Profile to apply your new picture.'
-                          : pendingAvatarRemoval
-                            ? 'Click Save Profile to remove your current picture.'
-                            : 'JPG, PNG or GIF. Max 5MB.'}
-                      </p>
-                    </div>
-                  </div>
+                    );
+                  })()}
 
                   <Dialog open={isAvatarPreviewOpen} onOpenChange={setIsAvatarPreviewOpen}>
                     <DialogContent className="max-w-md">
@@ -969,11 +994,18 @@ const Settings = () => {
                         <DialogTitle>Profile Picture</DialogTitle>
                       </DialogHeader>
                       <div className="flex items-center justify-center py-2">
-                        <img
-                          src={localAvatarPreview || (!pendingAvatarRemoval ? resolveFileUrl(profile?.avatarUrl) || '' : '')}
-                          alt={profile?.name || 'Avatar'}
-                          className="max-h-[60vh] w-full rounded-md object-contain"
-                        />
+                        {(() => {
+                          const avatarSrc = pendingAvatarRemoval
+                            ? null
+                            : localAvatarPreview || (profile?.avatarUrl ? resolveFileUrl(profile.avatarUrl) || profile.avatarUrl : null);
+                          return avatarSrc ? (
+                            <img
+                              src={avatarSrc}
+                              alt={profileForm.name || profile?.name || 'Avatar'}
+                              className="max-h-[60vh] w-full rounded-md object-contain"
+                            />
+                          ) : null;
+                        })()}
                       </div>
                     </DialogContent>
                   </Dialog>
