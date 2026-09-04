@@ -112,6 +112,7 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
                 <span>Qty: {row.quantity}</span>
                 {row.unitPrice != null && <span>Unit Price: ${row.unitPrice.toFixed(2)}</span>}
                 {row.leadTimeWeeks != null && <span>Lead: {row.leadTimeWeeks}wk</span>}
+                {row.owner && <span>Owner: {row.owner}{!row.ownerResolved && ' (unmatched)'}</span>}
               </div>
               {row.issues.length > 0 && (
                 <div

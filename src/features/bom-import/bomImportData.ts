@@ -29,6 +29,10 @@ export interface ImportRowPreview {
   /** 0-based hierarchy depth — used to indent the row in the review card. */
   level: number;
   existingPartId: string | null;
+  /** Raw "owner / handled by" name from the source file, or null. */
+  owner: string | null;
+  /** true once `owner` matched a real project member — the node gets an owner on commit. */
+  ownerResolved: boolean;
   issues: string[];
   /** false only when the row is missing a required field (or was explicitly skipped in chat) — every other issue is informational and still imports. */
   importable: boolean;
