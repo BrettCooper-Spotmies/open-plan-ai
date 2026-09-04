@@ -1862,7 +1862,7 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          <TabsContent value="tasks" className="mt-6 h-full min-h-[calc(100vh-260px)] flex flex-col flex-1">
+          <TabsContent value="tasks" className="mt-6">
             <TasksSection
               tasks={filteredTasks}
               allTasks={project.tasks || []}
@@ -1884,7 +1884,7 @@ export default function ProjectDetail() {
               onAddModule={canAddModulesAndMilestones ? handleAddModule : undefined}
             />
           </TabsContent>
-          <TabsContent value="modules" className={isMobileModuleDetailOpen ? '-mx-4' : 'mt-6 h-full min-h-[calc(100vh-260px)] flex flex-col flex-1'}>
+          <TabsContent value="modules" className={isMobileModuleDetailOpen ? '-mx-4' : 'mt-6'}>
             <ModulesSection
               modules={modules}
               tasks={project.tasks || []}
@@ -1905,7 +1905,7 @@ export default function ProjectDetail() {
               onMobileDetailOpenChange={setIsMobileModuleDetailOpen}
             />
           </TabsContent>
-          <TabsContent value="milestones" className="mt-6 h-full min-h-[calc(100vh-260px)] flex flex-col flex-1">
+          <TabsContent value="milestones" className="mt-6">
             <MilestonesView
               milestones={project.milestones || []}
               tasks={project.tasks || []}
@@ -1924,7 +1924,7 @@ export default function ProjectDetail() {
               stickyOffset={stickyHeaderHeight}
             />
           </TabsContent>
-          <TabsContent value="issues" className="mt-6 bg-background h-full min-h-[calc(100vh-260px)] flex flex-col flex-1">
+          <TabsContent value="issues" className="mt-6 bg-background">
             <IssuesView
               issues={project.issues || []}
               projectCode={project.code}

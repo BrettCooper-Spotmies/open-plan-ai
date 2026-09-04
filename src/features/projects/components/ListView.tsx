@@ -211,7 +211,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
 
   if (tasks.length === 0) {
     return (
-      <div className="rounded-lg border bg-card h-full min-h-[400px] flex flex-col flex-1 items-center justify-center p-12 text-center space-y-4">
+      <div className="rounded-lg border bg-card min-h-[calc(100vh-260px)] flex flex-col items-center justify-center p-12 text-center space-y-4">
         <p className="text-muted-foreground font-medium">No tasks to display</p>
         {onTaskCreate && (
           <Button onClick={() => setIsCreateModalOpen(true)} className="gap-2">
@@ -242,7 +242,7 @@ export function ListView({ tasks, allTasks: allTasksProp, milestones = [], modul
   return (
     <>
 
-      <div className="rounded-lg border bg-card h-full min-h-0 flex flex-col flex-1 overflow-hidden">
+      <div className="rounded-lg border bg-card min-h-[calc(100vh-260px)] flex flex-col overflow-hidden">
         <div className="flex-1 min-h-0 overflow-y-auto">
         <Table containerClassName="relative w-full overflow-visible">
           <TableHeader className="sticky top-0 z-10 bg-background shadow-sm">

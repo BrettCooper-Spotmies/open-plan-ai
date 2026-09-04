@@ -389,7 +389,7 @@ export function TasksSection({
   }, [tasks]);
 
   return (
-    <div className="flex flex-col gap-4 w-full min-w-0 flex-1 h-full min-h-[calc(100vh-260px)]">
+    <div className="grid grid-cols-1 gap-4 w-full min-w-0">
       {/* Filters Panel */}
       {isFiltersOpen && (
         <TaskFilters
@@ -404,7 +404,7 @@ export function TasksSection({
       )}
 
       {/* View Content */}
-      <div className="flex-1 h-full min-h-[calc(100vh-260px)] w-full min-w-0 flex flex-col">
+      <div className="min-h-[400px] w-full min-w-0">
         {isMobile ? (
           <MobileTaskListView
             projectId={projectId}

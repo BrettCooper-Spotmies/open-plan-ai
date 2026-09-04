@@ -271,9 +271,9 @@ export function ModulesSection({
 
   return (
     <>
-      <div className="space-y-4 flex flex-col w-full min-w-0 flex-1 h-full min-h-[calc(100vh-260px)]">
+      <div className="space-y-4 grid grid-cols-1 w-full min-w-0">
         {/* View Content */}
-        <div className="flex-1 h-full min-h-[calc(100vh-260px)] w-full min-w-0 flex flex-col">
+        <div className="min-h-[400px] w-full min-w-0">
           {isMobile ? (
             selectedModule ? (
               <ModuleDetailMobileView
