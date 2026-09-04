@@ -348,6 +348,7 @@ function IssueViewControls({
   onClearFilters: () => void;
 }) {
   const [filterOpen, setFilterOpen] = useState(false);
+  const sortedTeamMembers = [...teamMembers].sort((a, b) => a.name.localeCompare(b.name));
   return (
     <div className="flex items-center gap-2">
       {/* View Toggle (kanban/table has no distinct mobile layout — hidden below md) */}
@@ -449,67 +450,6 @@ function IssueViewControls({
               />
             </div>
 
-            {/* Assigned To Filter */}
-            <div className="space-y-2">
-              <Label className="text-xs flex items-center gap-1">
-                <User className="h-3 w-3" />
-                Assigned To
-              </Label>
-              <MultiSelect
-                options={[
-                  { value: 'unassigned', label: 'Unassigned' },
-                  ...teamMembers.map(member => ({ value: member.id, label: member.name }))
-                ]}
-                selected={filters.assigneeId || []}
-                onChange={(values) => onFiltersChange({ ...filters, assigneeId: values.length ? values : undefined })}
-                placeholder="All Assignees"
-              />
-            </div>
-
-            {/* Assigned By Filter */}
-            <div className="space-y-2">
-              <Label className="text-xs flex items-center gap-1">
-                <User className="h-3 w-3" />
-                Assigned By
-              </Label>
-              <MultiSelect
-                options={teamMembers.map(member => ({ value: member.id, label: member.name }))}
-                selected={filters.assignedById || []}
-                onChange={(values) => onFiltersChange({ ...filters, assignedById: values.length ? values : undefined })}
-                placeholder="All Members"
-              />
-            </div>
-
-            {/* Updated By Filter */}
-            <div className="space-y-2">
-              <Label className="text-xs flex items-center gap-1">
-                <User className="h-3 w-3" />
-                Updated By
-              </Label>
-              <MultiSelect
-                options={teamMembers.map(member => ({ value: member.id, label: member.name }))}
-                selected={filters.updatedById || []}
-                onChange={(values) => onFiltersChange({ ...filters, updatedById: values.length ? values : undefined })}
-                placeholder="All Members"
-              />
-            </div>
-
-            {/* Tags Filter */}
-            {allTags.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs flex items-center gap-1">
-                  <Tag className="h-3 w-3" />
-                  Tags
-                </Label>
-                <MultiSelect
-                  options={allTags.map((tag) => ({ value: tag, label: tag }))}
-                  selected={filters.tags || []}
-                  onChange={(values) => onFiltersChange({ ...filters, tags: values.length ? values : undefined })}
-                  placeholder="All Tags"
-                />
-              </div>
-            )}
-
             {/* Due Date Filter */}
             <DateFilterSelect
               label="Due Date"
@@ -555,6 +495,67 @@ function IssueViewControls({
                 completedDateCustomTo: customTo,
               })}
             />
+
+            {/* Assigned By Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <User className="h-3 w-3" />
+                Assigned By
+              </Label>
+              <MultiSelect
+                options={sortedTeamMembers.map(member => ({ value: member.id, label: member.name }))}
+                selected={filters.assignedById || []}
+                onChange={(values) => onFiltersChange({ ...filters, assignedById: values.length ? values : undefined })}
+                placeholder="All Members"
+              />
+            </div>
+
+            {/* Assigned To Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <User className="h-3 w-3" />
+                Assigned To
+              </Label>
+              <MultiSelect
+                options={[
+                  { value: 'unassigned', label: 'Unassigned' },
+                  ...sortedTeamMembers.map(member => ({ value: member.id, label: member.name }))
+                ]}
+                selected={filters.assigneeId || []}
+                onChange={(values) => onFiltersChange({ ...filters, assigneeId: values.length ? values : undefined })}
+                placeholder="All Assignees"
+              />
+            </div>
+
+            {/* Tags Filter */}
+            {allTags.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs flex items-center gap-1">
+                  <Tag className="h-3 w-3" />
+                  Tags
+                </Label>
+                <MultiSelect
+                  options={allTags.map((tag) => ({ value: tag, label: tag }))}
+                  selected={filters.tags || []}
+                  onChange={(values) => onFiltersChange({ ...filters, tags: values.length ? values : undefined })}
+                  placeholder="All Tags"
+                />
+              </div>
+            )}
+
+            {/* Updated By Filter */}
+            <div className="space-y-2">
+              <Label className="text-xs flex items-center gap-1">
+                <User className="h-3 w-3" />
+                Updated By
+              </Label>
+              <MultiSelect
+                options={sortedTeamMembers.map(member => ({ value: member.id, label: member.name }))}
+                selected={filters.updatedById || []}
+                onChange={(values) => onFiltersChange({ ...filters, updatedById: values.length ? values : undefined })}
+                placeholder="All Members"
+              />
+            </div>
           </div>
         </PopoverContent>
       </Popover>
