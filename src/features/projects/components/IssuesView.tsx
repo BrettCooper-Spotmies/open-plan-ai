@@ -777,7 +777,7 @@ export function IssuesView({
   );
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 flex-1 h-full min-h-[calc(100vh-260px)] flex flex-col">
       {viewMode === 'kanban' && isIssueColumnsLoading && !apiIssueColumns ? (
         <div className="flex flex-col items-center justify-center gap-3 py-24 text-muted-foreground">
           <Loader2 className="h-6 w-6 animate-spin" />

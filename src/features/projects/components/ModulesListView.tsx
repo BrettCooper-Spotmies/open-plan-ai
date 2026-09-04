@@ -23,14 +23,14 @@ interface ModulesListViewProps {
 export function ModulesListView({ modules, onModuleClick }: ModulesListViewProps) {
   if (modules.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-center">
-        <p className="text-muted-foreground">No modules to display</p>
+      <div className="rounded-lg border bg-card h-full min-h-[calc(100vh-260px)] flex flex-col flex-1 items-center justify-center p-12 text-center">
+        <p className="text-muted-foreground font-medium">No modules to display</p>
       </div>
     );
   }
 
   return (
-    <div className="rounded-lg border">
+    <div className="rounded-lg border bg-card h-full min-h-[calc(100vh-260px)] flex flex-col flex-1 overflow-hidden">
       <Table>
         <TableHeader>
           <TableRow>
