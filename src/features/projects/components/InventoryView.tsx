@@ -16,10 +16,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
 } from '@/components/ui/pagination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useProjects } from '@/hooks/useProjects';
@@ -465,17 +465,17 @@ export function InventoryView({ orgId }: InventoryViewProps) {
 
   // Cards view groups by category (unless a single category is already filtered), each
   // group preceded by a small "CATEGORY NAME · count" header — mirrors the design system's
-  // card grouping for Inventory. Grouped from the paginated slice, so cards view paginates
-  // the same as table view.
+  // card grouping for Inventory. Cards view shows the full filtered list (no pagination
+  // there — only the table view paginates).
   const cardGroups = useMemo(() => {
-    if (categoryFilter !== 'all') return [{ cat: categoryFilter as BOMCategory, items: paginatedStock }];
+    if (categoryFilter !== 'all') return [{ cat: categoryFilter as BOMCategory, items: filteredStock }];
     const byCat = new Map<BOMCategory, StockRecord[]>();
-    for (const r of paginatedStock) {
+    for (const r of filteredStock) {
       if (!byCat.has(r.cat)) byCat.set(r.cat, []);
       byCat.get(r.cat)!.push(r);
     }
     return allCategories.filter(cat => byCat.has(cat)).map(cat => ({ cat, items: byCat.get(cat)! }));
-  }, [paginatedStock, categoryFilter, allCategories]);
+  }, [filteredStock, categoryFilter, allCategories]);
 
   const coverageCounts = useMemo(() => {
     const counts: Record<CoverageStatus, number> = { ready: 0, 'covered-by-order': 0, short: 0, conflict: 0 };
@@ -1152,8 +1152,8 @@ export function InventoryView({ orgId }: InventoryViewProps) {
               )}
           </div>
 
-              {!isMobile && filteredStock.length > 0 && (
-                <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-border pt-3 text-xs text-muted-foreground">
+              {!isMobile && viewMode === 'table' && filteredStock.length > 0 && (
+                <div className="shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 text-xs text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <span>
                       Showing {Math.min((currentPage - 1) * pageSize + 1, filteredStock.length)}–{Math.min(currentPage * pageSize, filteredStock.length)} of {filteredStock.length}
@@ -1171,43 +1171,41 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                     </Select>
                   </div>
 
-                  {totalPages > 1 && (
-                    <Pagination className="mx-0 w-auto">
-                      <PaginationContent>
-                        <PaginationItem>
-                          <PaginationPrevious
-                            href="#"
-                            onClick={(e) => { e.preventDefault(); setCurrentPage((p) => Math.max(1, p - 1)); }}
-                            className={cn(currentPage === 1 && 'pointer-events-none opacity-50')}
-                          />
-                        </PaginationItem>
-                        {getPageNumbers().map((page, idx) =>
-                          page === 'ellipsis' ? (
-                            <PaginationItem key={`ellipsis-${idx}`}>
-                              <span className="flex h-9 w-9 items-center justify-center text-muted-foreground">…</span>
-                            </PaginationItem>
-                          ) : (
-                            <PaginationItem key={page}>
-                              <PaginationLink
-                                href="#"
-                                isActive={page === currentPage}
-                                onClick={(e) => { e.preventDefault(); setCurrentPage(page); }}
-                              >
-                                {page}
-                              </PaginationLink>
-                            </PaginationItem>
-                          ),
-                        )}
-                        <PaginationItem>
-                          <PaginationNext
-                            href="#"
-                            onClick={(e) => { e.preventDefault(); setCurrentPage((p) => Math.min(totalPages, p + 1)); }}
-                            className={cn(currentPage === totalPages && 'pointer-events-none opacity-50')}
-                          />
-                        </PaginationItem>
-                      </PaginationContent>
-                    </Pagination>
-                  )}
+                  <Pagination className="mx-0 w-auto">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(e) => { e.preventDefault(); setCurrentPage((p) => Math.max(1, p - 1)); }}
+                          className={cn(currentPage === 1 && 'pointer-events-none opacity-50')}
+                        />
+                      </PaginationItem>
+                      {getPageNumbers().map((page, idx) =>
+                        page === 'ellipsis' ? (
+                          <PaginationItem key={`ellipsis-${idx}`}>
+                            <span className="flex h-9 w-9 items-center justify-center text-muted-foreground">…</span>
+                          </PaginationItem>
+                        ) : (
+                          <PaginationItem key={page}>
+                            <PaginationLink
+                              href="#"
+                              isActive={page === currentPage}
+                              onClick={(e) => { e.preventDefault(); setCurrentPage(page); }}
+                            >
+                              {page}
+                            </PaginationLink>
+                          </PaginationItem>
+                        ),
+                      )}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => { e.preventDefault(); setCurrentPage((p) => Math.min(totalPages, p + 1)); }}
+                          className={cn(currentPage === totalPages && 'pointer-events-none opacity-50')}
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
                 </div>
               )}
           </div>
