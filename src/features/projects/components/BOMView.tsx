@@ -504,20 +504,33 @@ function Section({ title, icon: Icon, count, children }: {
   );
 }
 
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function Chip({ active, onClick, onDelete, children }: { active: boolean; onClick: () => void; onDelete?: () => void; children: React.ReactNode }) {
   return (
-    <button
+    <div
       onClick={onClick}
       title={typeof children === 'string' ? children : undefined}
       className={cn(
-        'px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border transition-colors max-w-[190px] truncate',
+        'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer border transition-colors max-w-[210px] select-none group',
         active
           ? 'bg-primary/10 text-primary border-primary/30'
           : 'bg-card text-muted-foreground border-border hover:bg-muted'
       )}
     >
-      {children}
-    </button>
+      <span className="truncate">{children}</span>
+      {onDelete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          title="Delete custom option"
+          className="w-4 h-4 rounded-full flex items-center justify-center text-muted-foreground/70 hover:text-destructive hover:bg-destructive/15 transition-all shrink-0 -mr-1"
+        >
+          <X className="w-3 h-3" />
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -544,8 +557,22 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
   currencySymbol: string;
 }) {
   const [draft, setDraft] = useState<BOMFilters>({ ...filters });
-  const [customMfrs, setCustomMfrs] = useState<string[]>([]);
-  const [customSuppliers, setCustomSuppliers] = useState<string[]>([]);
+  const [customMfrs, setCustomMfrs] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('openplan_custom_mfrs');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [customSuppliers, setCustomSuppliers] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('openplan_custom_suppliers');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [mfrInput, setMfrInput] = useState('');
   const [supplierInput, setSupplierInput] = useState('');
   const [showMfrInput, setShowMfrInput] = useState(false);
@@ -569,7 +596,11 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
   const addCustomMfr = () => {
     const v = mfrInput.trim();
     if (!v) return;
-    if (!customMfrs.includes(v)) setCustomMfrs(m => [...m, v]);
+    if (!customMfrs.includes(v)) {
+      const updated = [...customMfrs, v];
+      setCustomMfrs(updated);
+      try { localStorage.setItem('openplan_custom_mfrs', JSON.stringify(updated)); } catch {}
+    }
     setDraft(f => ({
       ...f,
       manufacturers: f.manufacturers.includes(v) ? f.manufacturers : [...f.manufacturers, v],
@@ -578,16 +609,44 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
     setShowMfrInput(false);
   };
 
+  const removeCustomMfr = (v: string) => {
+    setCustomMfrs(m => {
+      const updated = m.filter(x => x !== v);
+      try { localStorage.setItem('openplan_custom_mfrs', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    setDraft(f => ({
+      ...f,
+      manufacturers: f.manufacturers.filter(x => x !== v),
+    }));
+  };
+
   const addCustomSupplier = () => {
     const v = supplierInput.trim();
     if (!v) return;
-    if (!customSuppliers.includes(v)) setCustomSuppliers(s => [...s, v]);
+    if (!customSuppliers.includes(v)) {
+      const updated = [...customSuppliers, v];
+      setCustomSuppliers(updated);
+      try { localStorage.setItem('openplan_custom_suppliers', JSON.stringify(updated)); } catch {}
+    }
     setDraft(f => ({
       ...f,
       suppliers: f.suppliers.includes(v) ? f.suppliers : [...f.suppliers, v],
     }));
     setSupplierInput('');
     setShowSupplierInput(false);
+  };
+
+  const removeCustomSupplier = (v: string) => {
+    setCustomSuppliers(s => {
+      const updated = s.filter(x => x !== v);
+      try { localStorage.setItem('openplan_custom_suppliers', JSON.stringify(updated)); } catch {}
+      return updated;
+    });
+    setDraft(f => ({
+      ...f,
+      suppliers: f.suppliers.filter(x => x !== v),
+    }));
   };
 
 
@@ -717,8 +776,11 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
           <Section title="Manufacturer" icon={Factory} count={draft.manufacturers.length}>
             <div className="flex gap-2 flex-wrap">
-              {[...facets.manufacturers, ...customMfrs.filter(c => !facets.manufacturers.includes(c))].map(m => (
+              {facets.manufacturers.map(m => (
                 <Chip key={m} active={draft.manufacturers.includes(m)} onClick={() => toggle('manufacturers', m)}>{m}</Chip>
+              ))}
+              {customMfrs.filter(c => !facets.manufacturers.includes(c)).map(m => (
+                <Chip key={m} active={draft.manufacturers.includes(m)} onClick={() => toggle('manufacturers', m)} onDelete={() => removeCustomMfr(m)}>{m}</Chip>
               ))}
               {showMfrInput ? (
                 <div className="flex items-center gap-1 bg-muted border border-primary/40 rounded-md px-2 py-0.5">
@@ -745,8 +807,11 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
           <Section title="Supplier / Distributor" icon={Truck} count={draft.suppliers.length}>
             <div className="flex gap-2 flex-wrap">
-              {[...facets.suppliers, ...customSuppliers.filter(c => !facets.suppliers.includes(c))].map(s => (
+              {facets.suppliers.map(s => (
                 <Chip key={s} active={draft.suppliers.includes(s)} onClick={() => toggle('suppliers', s)}>{s}</Chip>
+              ))}
+              {customSuppliers.filter(c => !facets.suppliers.includes(c)).map(s => (
+                <Chip key={s} active={draft.suppliers.includes(s)} onClick={() => toggle('suppliers', s)} onDelete={() => removeCustomSupplier(s)}>{s}</Chip>
               ))}
               {showSupplierInput ? (
                 <div className="flex items-center gap-1 bg-muted border border-primary/40 rounded-md px-2 py-0.5">
