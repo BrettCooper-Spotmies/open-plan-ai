@@ -40,7 +40,7 @@ import {
 } from './bomData';
 import {
   buildFromDef, computeCoverage, availableOf, onOrderOf,
-  CoveragePill, CoverageBar,
+  CoveragePill,
   type StockRecord, type CoverageStatus, type BuildDef, type OrderRecord,
 } from './inventoryData';
 import { HoverZoomImage, PartThumb } from './BOMShared';
@@ -999,7 +999,6 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                           <TableRow key={r.id} className="cursor-pointer" onClick={() => openDetail(r.partId)}>
                             <TableCell className="px-3 py-2 align-top">
                               <CoveragePill status={status} />
-                              <CoverageBar status={status} record={r} />
                             </TableCell>
                             <TableCell className="px-3 py-2">
                               <div className="flex items-center gap-2.5 min-w-0">
@@ -1122,8 +1121,6 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                                       ) : null}
                                     </div>
                                   </div>
-
-                                  <CoverageBar status={status} record={r} />
 
                                   <div className="grid grid-cols-4 gap-2 pt-2.5 border-t border-border">
                                     <div>

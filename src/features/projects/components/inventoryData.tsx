@@ -3,8 +3,8 @@
 // Stock/orders/transactions/builds are persisted via the real backend — see
 // src/services/inventory.service.ts and src/hooks/useInventory.ts. This file holds only
 // backend-agnostic types, coverage/netting math (computeCoverage, availableOf, onOrderOf,
-// buildFromDef), and display components (LocationCombobox, CategoryCombobox, CoveragePill,
-// CoverageBar) that both real and (formerly) mock data flowed through unchanged.
+// buildFromDef), and display components (LocationCombobox, CategoryCombobox, CoveragePill)
+// that both real and (formerly) mock data flowed through unchanged.
 
 import { useState, useEffect, useMemo } from 'react';
 import { Lock, Plus } from 'lucide-react';
@@ -435,26 +435,6 @@ export function CoveragePill({ status }: { status: CoverageStatus }) {
     >
       {meta.label}
     </span>
-  );
-}
-
-/** Thin bar under the coverage pill — fill = remaining unallocated share of on-hand stock. */
-export function CoverageBar({ status, record }: { status: CoverageStatus; record: StockRecord }) {
-  const available = availableOf(record);
-  if (available < 0) {
-    const overRatio = Math.min(1, Math.abs(available) / Math.max(record.allocated, 1));
-    return (
-      <div className="flex h-1 w-full rounded-full overflow-hidden bg-muted mt-1.5">
-        <div style={{ width: `${(1 - overRatio) * 100}%`, background: COVERAGE_META.conflict.fg }} />
-        <div style={{ width: `${overRatio * 100}%`, background: COVERAGE_META['covered-by-order'].fg }} />
-      </div>
-    );
-  }
-  const pct = record.onHand > 0 ? Math.round((available / record.onHand) * 100) : 0;
-  return (
-    <div className="h-1 w-full rounded-full bg-muted overflow-hidden mt-1.5">
-      <div style={{ width: `${Math.max(0, Math.min(100, pct))}%`, background: COVERAGE_META[status].fg }} />
-    </div>
   );
 }
 
