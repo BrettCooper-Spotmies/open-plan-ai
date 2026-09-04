@@ -363,24 +363,24 @@ export function MyDayListView({
   }
 
   return (
-    <div className="rounded-lg border bg-card h-full flex flex-col min-h-0 overflow-hidden">
+    <div className="rounded-lg border bg-card h-full min-h-0 flex flex-col flex-1 overflow-hidden">
       <Table containerClassName="flex-1 min-h-0 overflow-auto">
         <TableHeader className="sticky top-0 z-10 bg-background shadow-xs">
-            <TableRow className="bg-background">
-              <SortableHead field="title" className="w-[300px]">Task</SortableHead>
-              <SortableHead field="type" className="w-[60px]">Type</SortableHead>
-              <SortableHead field="status">Status</SortableHead>
-              <SortableHead field="priority">Priority</SortableHead>
-              {/* <TableHead>Module</TableHead> */}
-              <SortableHead field="project">Project</SortableHead>
-              <TableHead className="sticky top-0 z-10 bg-background border-b shadow-xs">Assigned By</TableHead>
-              <SortableHead field="dueDate">Due Date</SortableHead>
-            </TableRow>
-          </TableHeader>
+          <TableRow className="bg-background hover:bg-background">
+            <SortableHead field="title" className="w-[300px]">Task</SortableHead>
+            <SortableHead field="type" className="w-[60px]">Type</SortableHead>
+            <SortableHead field="status">Status</SortableHead>
+            <SortableHead field="priority">Priority</SortableHead>
+            {/* <TableHead>Module</TableHead> */}
+            <SortableHead field="project">Project</SortableHead>
+            <TableHead className="sticky top-0 z-10 bg-background border-b shadow-xs">Assigned By</TableHead>
+            <SortableHead field="dueDate">Due Date</SortableHead>
+          </TableRow>
+        </TableHeader>
         <TableBody>
           {paginatedTasks.length === 0 ? (
-            <TableRow>
-              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={7} className="text-center py-20 text-muted-foreground font-medium">
                 {emptyMessage}
               </TableCell>
             </TableRow>

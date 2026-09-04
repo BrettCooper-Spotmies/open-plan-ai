@@ -392,8 +392,8 @@ export default function MyDay() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 min-h-0 w-full min-w-0">
-          <div className="h-full min-h-0 w-full min-w-0">
+        <div className="flex-1 min-h-0 w-full min-w-0 flex flex-col">
+          <div className="h-full min-h-0 w-full min-w-0 flex flex-col flex-1">
             {view === 'kanban' ? (
               <MyDayKanbanView
                 tasks={filteredTasks}
