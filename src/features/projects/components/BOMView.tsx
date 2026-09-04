@@ -1448,86 +1448,141 @@ export function BOMView({
 
   const handleView = (v: ViewMode) => { setView(v); localStorage.setItem('bom_view', v); };
 
+  // Caches the part/node created by the current "Add Part" sheet session, so
+  // that if the docs/photo/requirement-link step below fails, retrying Save
+  // reuses them instead of calling createPart again (which would 409 as a
+  // duplicate part number) — see handleAddPart. Cleared on dialog close.
+  const pendingAddPartRef = useRef<{
+    part: Awaited<ReturnType<typeof createPart.mutateAsync>>;
+    node: Awaited<ReturnType<typeof createNode.mutateAsync>>;
+  } | null>(null);
+
   // ── Add Part handler (two-step: create part in catalog, then node) ─
   const handleAddPart = async (payload: BOMPartPayload) => {
+    let part = pendingAddPartRef.current?.part;
+    let node = pendingAddPartRef.current?.node;
+    if (!part || !node) {
+      try {
+        part = await createPart.mutateAsync({
+          partNumber: payload.pn,
+          name: payload.name,
+          description: payload.desc,
+          category: payload.category,
+          manufacturer: payload.manufacturer || undefined,
+          distributor: payload.distributor || undefined,
+          mpn: payload.mpn || undefined,
+          unit: payload.uom,
+          initialStatus: toInitialRevisionStatus(payload.status),
+          initialRev: payload.rev,
+          initialPrice: payload.price > 0 ? payload.price : undefined,
+          initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
+          initialSuppliers: payload.suppliers?.length ? payload.suppliers : undefined,
+          // Additional Fields from the form — dropped here until now, so anything
+          // typed into that section vanished the moment the part was created.
+          customFields: payload.customFields?.length ? payload.customFields : undefined,
+        });
+        node = await createNode.mutateAsync({
+          partId: part.id,
+          quantity: payload.qty,
+          unit: payload.uom,
+          status: toNodeStatus(payload.status),
+          ownerId: payload.ownerId ?? null,
+        });
+        pendingAddPartRef.current = { part, node };
+      } catch (err) {
+        toast.error('Failed to add part', {
+          description: err instanceof Error ? err.message : undefined,
+        });
+        throw err; // re-throw so the dialog stays open and the user can retry
+      }
+    }
+
+    // Part + BOM node are already committed at this point. If the docs/photo/
+    // requirement-link step below fails, don't report the whole add as
+    // failed (it wasn't) — but don't silently close and report success
+    // either, or the user will believe attachments saved when they didn't.
+    // Keep the dialog open so retrying Save (via the cache above) only
+    // retries the attachment step, and the part/node are never duplicated.
     try {
-      const part = await createPart.mutateAsync({
-        partNumber: payload.pn,
-        name: payload.name,
-        description: payload.desc,
-        category: payload.category,
-        manufacturer: payload.manufacturer || undefined,
-        distributor: payload.distributor || undefined,
-        mpn: payload.mpn || undefined,
-        unit: payload.uom,
-        initialStatus: toInitialRevisionStatus(payload.status),
-        initialRev: payload.rev,
-        initialPrice: payload.price > 0 ? payload.price : undefined,
-        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers: payload.suppliers?.length ? payload.suppliers : undefined,
-        // Additional Fields from the form — dropped here until now, so anything
-        // typed into that section vanished the moment the part was created.
-        customFields: payload.customFields?.length ? payload.customFields : undefined,
-      });
-      const node = await createNode.mutateAsync({
-        partId: part.id,
-        quantity: payload.qty,
-        unit: payload.uom,
-        status: toNodeStatus(payload.status),
-        ownerId: payload.ownerId ?? null,
-      });
-      // Upload any documents attached in the form
       const { photoUrl } = await saveBomDocs(node.id, payload);
       if (photoUrl) await updatePart.mutateAsync({ partId: part.id, dto: { imageUrl: photoUrl } });
-      // Link any requirements added in the Traceability tab
       await Promise.all(payload.req.map(requirementId => addRequirement.mutateAsync({ nodeId: node.id, requirementId })));
-      toast.success('Part added to BOM');
-      if (onAddClose) onAddClose();
     } catch (err) {
-      toast.error('Failed to add part', {
+      toast.error('Part saved, but documents or requirement links failed — click Save to retry', {
         description: err instanceof Error ? err.message : undefined,
       });
-      throw err; // re-throw so the dialog stays open and the user can retry
+      throw err; // re-throw so the dialog stays open; onSave's cache skips re-creating the part
     }
+    toast.success('Part added to BOM');
+    pendingAddPartRef.current = null;
+    if (onAddClose) onAddClose();
   };
+
+  // Same caching purpose as pendingAddPartRef above, for the "+" sub-component flow.
+  const pendingAddSubNodeRef = useRef<{
+    part: Awaited<ReturnType<typeof createPart.mutateAsync>>;
+    node: Awaited<ReturnType<typeof createNode.mutateAsync>>;
+  } | null>(null);
 
   // ── Add Sub-component handler (from the list view "+" action) ──────
   const handleAddSubcomponent = async (payload: BOMPartPayload) => {
     if (!createSubNode) return;
+    let part = pendingAddSubNodeRef.current?.part;
+    let node = pendingAddSubNodeRef.current?.node;
+    if (!part || !node) {
+      try {
+        part = await createPart.mutateAsync({
+          partNumber: payload.pn,
+          name: payload.name,
+          description: payload.desc,
+          category: payload.category,
+          manufacturer: payload.manufacturer || undefined,
+          distributor: payload.distributor || undefined,
+          mpn: payload.mpn || undefined,
+          unit: payload.uom,
+          initialStatus: toInitialRevisionStatus(payload.status),
+          initialRev: payload.rev,
+          initialPrice: payload.price > 0 ? payload.price : undefined,
+          initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
+          initialSuppliers: payload.suppliers?.length ? payload.suppliers : undefined,
+          // Additional Fields from the form — dropped here until now, so anything
+          // typed into that section vanished the moment the part was created.
+          customFields: payload.customFields?.length ? payload.customFields : undefined,
+        });
+        node = await createNode.mutateAsync({
+          partId: part.id,
+          quantity: payload.qty,
+          unit: payload.uom,
+          status: toNodeStatus(payload.status),
+          parentId: createSubNode.id,
+          ownerId: payload.ownerId ?? null,
+        });
+        pendingAddSubNodeRef.current = { part, node };
+      } catch (err) {
+        toast.error('Failed to add sub-component', {
+          description: err instanceof Error ? err.message : undefined,
+        });
+        throw err; // re-throw so the dialog stays open and the user can retry
+      }
+    }
+
+    // Part + BOM node are already committed at this point. Keep the dialog
+    // open on a docs/photo/requirement-link failure (same reasoning as
+    // handleAddPart) so the user isn't told it worked when attachments didn't,
+    // and so retrying Save reuses the cached part/node instead of duplicating it.
     try {
-      const part = await createPart.mutateAsync({
-        partNumber: payload.pn,
-        name: payload.name,
-        description: payload.desc,
-        category: payload.category,
-        manufacturer: payload.manufacturer || undefined,
-        distributor: payload.distributor || undefined,
-        mpn: payload.mpn || undefined,
-        unit: payload.uom,
-        initialStatus: toInitialRevisionStatus(payload.status),
-        initialRev: payload.rev,
-        initialPrice: payload.price > 0 ? payload.price : undefined,
-        initialLeadTimeDays: payload.leadTime > 0 ? payload.leadTime : undefined,
-        initialSuppliers: payload.suppliers?.length ? payload.suppliers : undefined,
-        // Additional Fields from the form — dropped here until now, so anything
-        // typed into that section vanished the moment the part was created.
-        customFields: payload.customFields?.length ? payload.customFields : undefined,
-      });
-      const node = await createNode.mutateAsync({
-        partId: part.id,
-        quantity: payload.qty,
-        unit: payload.uom,
-        status: toNodeStatus(payload.status),
-        parentId: createSubNode.id,
-        ownerId: payload.ownerId ?? null,
-      });
       const { photoUrl } = await saveBomDocs(node.id, payload);
       if (photoUrl) await updatePart.mutateAsync({ partId: part.id, dto: { imageUrl: photoUrl } });
       await Promise.all(payload.req.map(requirementId => addRequirement.mutateAsync({ nodeId: node.id, requirementId })));
-      setCreateSubNode(null);
-    } catch {
-      // errors are logged by React Query's MutationCache; no further action needed
+    } catch (err) {
+      toast.error('Sub-component saved, but documents or requirement links failed — click Save to retry', {
+        description: err instanceof Error ? err.message : undefined,
+      });
+      throw err; // re-throw so the dialog stays open; onSave's cache skips re-creating the part
     }
+    toast.success('Sub-component added to BOM');
+    pendingAddSubNodeRef.current = null;
+    setCreateSubNode(null);
   };
 
   const handleExportCsv = async () => {
@@ -2061,7 +2116,7 @@ export function BOMView({
         projectId={projectId}
         orgId={orgId}
         open={addManualOpen}
-        onClose={() => { setAddManualOpen(false); onAddClose?.(); }}
+        onClose={() => { setAddManualOpen(false); pendingAddPartRef.current = null; onAddClose?.(); }}
         onSave={handleAddPart}
       />
 
@@ -2128,7 +2183,7 @@ export function BOMView({
           projectId={projectId}
           orgId={orgId}
           open={!!createSubNode}
-          onClose={() => setCreateSubNode(null)}
+          onClose={() => { setCreateSubNode(null); pendingAddSubNodeRef.current = null; }}
           onSave={handleAddSubcomponent}
           isSubPart
         />
