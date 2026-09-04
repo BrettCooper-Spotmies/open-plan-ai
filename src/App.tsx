@@ -130,14 +130,6 @@ function AppShell() {
               }
             />
             <Route
-              path="/my-day"
-              element={
-                <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
-                  <MyDay />
-                </Suspense>
-              }
-            />
-            <Route
               path="/projects"
               element={
                 <Suspense fallback={<AppLayoutSkeleton variant="projects" />}>
@@ -281,6 +273,14 @@ function AppShell() {
 
           {/* ── Routes without content padding ───────────────── */}
           <Route element={<AppLayoutOutlet noPadding />}>
+            <Route
+              path="/my-day"
+              element={
+                <Suspense fallback={<AppLayoutSkeleton variant="list" />}>
+                  <MyDay />
+                </Suspense>
+              }
+            />
             <Route
               path="/inventory"
               element={
