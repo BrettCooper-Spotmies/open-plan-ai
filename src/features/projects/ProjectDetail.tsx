@@ -139,22 +139,34 @@ function MilestoneViewControls({
 }) {
   return (
     <div className="flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
-      <Button
-        variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-        size="sm"
-        className="h-8 w-8 p-0"
-        onClick={() => onViewModeChange('kanban')}
-      >
-        <LayoutGrid className="h-4 w-4" />
-      </Button>
-      <Button
-        variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-        size="sm"
-        className="h-8 w-8 p-0"
-        onClick={() => onViewModeChange('list')}
-      >
-        <List className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => onViewModeChange('kanban')}
+            aria-label="Kanban view"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">Kanban View</TooltipContent>
+      </Tooltip>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => onViewModeChange('list')}
+            aria-label="List view"
+          >
+            <List className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="top">List View</TooltipContent>
+      </Tooltip>
     </div>
   );
 }
@@ -340,22 +352,34 @@ function IssueViewControls({
     <div className="flex items-center gap-2">
       {/* View Toggle (kanban/table has no distinct mobile layout — hidden below md) */}
       <div className="hidden md:flex items-center gap-0.5 bg-muted/50 p-1 rounded-lg shrink-0">
-        <Button
-          variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
-          size="sm"
-          className="h-8 w-8 p-0"
-          onClick={() => onViewModeChange('kanban')}
-        >
-          <LayoutGrid className="h-4 w-4" />
-        </Button>
-        <Button
-          variant={viewMode === 'table' ? 'secondary' : 'ghost'}
-          size="sm"
-          className="h-8 w-8 p-0"
-          onClick={() => onViewModeChange('table')}
-        >
-          <List className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={viewMode === 'kanban' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => onViewModeChange('kanban')}
+              aria-label="Kanban view"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Kanban View</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant={viewMode === 'table' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={() => onViewModeChange('table')}
+              aria-label="Table view"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">Table View</TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Filter Dropdown */}
@@ -1633,7 +1657,7 @@ export default function ProjectDetail() {
                 {section === 'tasks' && (
                   <>
                     {/* Left: Search */}
-                    <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                    <div className="relative flex items-center flex-1 min-w-0 max-w-sm sm:max-w-md">
                       <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
                       <Input
                         placeholder="Search tasks..."
@@ -1695,7 +1719,7 @@ export default function ProjectDetail() {
                 {section === 'modules' && (
                   <>
                     {/* Left: Search */}
-                    <div className="relative flex items-center flex-1 min-w-0 max-w-none md:max-w-xs">
+                    <div className="relative flex items-center flex-1 min-w-0 max-w-sm sm:max-w-md">
                       <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
                       <Input
                         placeholder="Search modules..."
@@ -1736,7 +1760,7 @@ export default function ProjectDetail() {
                 {section === 'milestones' && (
                   <>
                     {/* Left: Search */}
-                    <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                    <div className="relative flex items-center flex-1 min-w-0 max-w-sm sm:max-w-md">
                       <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
                       <Input
                         placeholder="Search milestones..."
@@ -1777,7 +1801,7 @@ export default function ProjectDetail() {
                 {section === 'issues' && (
                   <>
                     {/* Left: Search */}
-                    <div className="relative flex items-center flex-1 min-w-0 max-w-xs">
+                    <div className="relative flex items-center flex-1 min-w-0 max-w-sm sm:max-w-md">
                       <Search className="absolute left-3 h-4 w-4 text-muted-foreground shrink-0" />
                       <Input
                         placeholder="Search issues..."

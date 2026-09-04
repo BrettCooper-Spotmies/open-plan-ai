@@ -10,6 +10,7 @@ import { IssueDetailModal } from '@/features/projects/components/IssueDetailModa
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
 import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
 import { Task, Issue, TaskStatus, IssueStatus, MyDayGroupBy, MyDayFilter, MyTasksColumnFilters } from '@/types';
@@ -347,29 +348,40 @@ export default function MyDay() {
                   placeholder="Search tasks..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="h-9 w-[140px] sm:w-[200px] pl-8 text-xs sm:text-sm"
+                  className="h-9 w-[180px] sm:w-[300px] md:w-[360px] pl-8 text-xs sm:text-sm"
                 />
               </div>
 
               <div className="flex items-center rounded-lg border p-0.5 h-9 shrink-0">
-                <Button
-                  size="sm"
-                  variant={view === 'list' ? 'secondary' : 'ghost'}
-                  className="h-8 px-2 rounded-md"
-                  onClick={() => setView('list')}
-                  aria-label="List view"
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant={view === 'kanban' ? 'secondary' : 'ghost'}
-                  className="h-8 px-2 rounded-md"
-                  onClick={() => setView('kanban')}
-                  aria-label="Kanban view"
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant={view === 'list' ? 'secondary' : 'ghost'}
+                      className="h-8 px-2 rounded-md"
+                      onClick={() => setView('list')}
+                      aria-label="List view"
+                    >
+                      <List className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">List View</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant={view === 'kanban' ? 'secondary' : 'ghost'}
+                      className="h-8 px-2 rounded-md"
+                      onClick={() => setView('kanban')}
+                      aria-label="Kanban view"
+                    >
+                      <LayoutGrid className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">Kanban View</TooltipContent>
+                </Tooltip>
               </div>
 
               <MyTasksFiltersDropdown
