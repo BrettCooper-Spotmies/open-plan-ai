@@ -11,7 +11,7 @@ import { Lock, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { KNOWN_BOM_CATEGORIES, UOM_OPTIONS, type BOMCategory } from './bomData';
+import { KNOWN_BOM_CATEGORIES, UOM_OPTIONS, getCategoryMeta, type BOMCategory } from './bomData';
 
 export const STOCK_LOCATIONS = ['Lab Shelf A', 'Lab Shelf B', 'Incoming Dock', 'CM', 'Quarantine'] as const;
 // Locations are free-text and org-owned: LocationCombobox shows only the org's own
@@ -171,6 +171,12 @@ export function LockedLocationField({ location }: { location: string }) {
 const CUSTOM_CATEGORY_SENTINEL = '__custom_category__';
 
 function formatCategoryOptionLabel(category: string): string {
+  // Known BOM categories carry a friendly label ("Top Assembly", "Charging
+  // Connectors", "HMI & Interface") — mirror the same names the BOM part sheet
+  // and the inventory category chips use instead of raw-casing the enum key.
+  if ((KNOWN_BOM_CATEGORIES as readonly string[]).includes(category.trim().toLowerCase())) {
+    return getCategoryMeta(category.trim().toLowerCase()).label;
+  }
   return category
     .trim()
     .split(/[_-]+|\s+/)
