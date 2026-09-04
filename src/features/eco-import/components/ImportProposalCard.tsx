@@ -89,6 +89,7 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
               <div className={cn('text-xs text-muted-foreground flex flex-wrap gap-x-4 gap-y-1', compact && 'gap-x-3 text-[11px]')}>
                 <span>Type: {row.type === 'other' && row.typeOther ? row.typeOther : ECO_IMPORT_TYPE_LABEL[row.type] ?? row.type}</span>
                 <span>Reason: {row.reason === 'other' && row.reasonOther ? row.reasonOther : ECO_IMPORT_REASON_LABEL[row.reason] ?? row.reason}</span>
+                {row.owner && <span>Owner: {row.owner}{!row.ownerResolved && ' (unmatched)'}</span>}
                 {row.targetDate && <span>Target: {row.targetDate}</span>}
                 {row.originatingEcr && <span>Ref: {row.originatingEcr}</span>}
               </div>

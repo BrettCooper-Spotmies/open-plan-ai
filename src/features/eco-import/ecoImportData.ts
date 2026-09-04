@@ -65,6 +65,10 @@ export interface ImportRowPreview {
   reason: EcoImportReason;
   reasonOther: string | null;
   priority: EcoImportPriority;
+  /** Raw "owner / handled by" name from the source file, or null. */
+  owner: string | null;
+  /** true once `owner` matched a real project member — the ECO gets that owner on commit (otherwise it's owned by whoever ran the import). */
+  ownerResolved: boolean;
   targetDate: string | null;
   /** The source file's own reference ID for this change (e.g. an "ECO ID" column), if any — stored for traceability, never this ECO's real number. */
   originatingEcr: string | null;
