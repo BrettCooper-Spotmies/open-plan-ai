@@ -33,6 +33,8 @@ export interface ImportRowPreview {
   owner: string | null;
   /** true once `owner` matched a real project member — the node gets an owner on commit. */
   ownerResolved: boolean;
+  /** Product photo URL from the source file, or null — set on the new part on commit. */
+  imageUrl: string | null;
   issues: string[];
   /** false only when the row is missing a required field (or was explicitly skipped in chat) — every other issue is informational and still imports. */
   importable: boolean;

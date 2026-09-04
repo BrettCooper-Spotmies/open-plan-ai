@@ -113,6 +113,12 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
                 {row.unitPrice != null && <span>Unit Price: ${row.unitPrice.toFixed(2)}</span>}
                 {row.leadTimeWeeks != null && <span>Lead: {row.leadTimeWeeks}wk</span>}
                 {row.owner && <span>Owner: {row.owner}{!row.ownerResolved && ' (unmatched)'}</span>}
+                {row.imageUrl && (
+                  <span className="inline-flex items-center gap-1">
+                    <img src={row.imageUrl} alt="" className="h-4 w-4 rounded object-cover border" loading="lazy" />
+                    Photo
+                  </span>
+                )}
               </div>
               {row.issues.length > 0 && (
                 <div
