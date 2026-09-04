@@ -57,7 +57,7 @@ import type { NewBuildInput } from './NewBuildDialog';
 
 const STAT_TOOLTIPS: Record<string, string> = {
   'On Hand': 'Physical quantity currently in stock, including anything held in quarantine.',
-  'Allocated': 'Quantity already reserved against BOM demand for planned builds.',
+  'Allocated': 'Quantity reserved against a build via Allocate — committed but not yet issued.',
   'Available': 'On Hand minus Allocated minus Quarantine — what can actually be used right now.',
   'On Order': 'Quantity remaining on open purchase orders, not yet received.',
 };
@@ -196,9 +196,10 @@ export function InventoryView({ orgId }: InventoryViewProps) {
 
   // `onOrder` is derived from live order state rather than the static seeded field, so
   // Receive/Order actions are reflected immediately without touching stock rows directly.
-  // Note: `allocated` is intentionally left as-is here (always 0 from the backend, which never
-  // writes reservations) — `availableOf`/`computeCoverage` already subtract BOM demand via the
-  // `demandByPartId` param, so overriding `allocated` with that same demand would double-count it.
+  // Note: `allocated` is passed through untouched — it's the stock row's real pooled reservation
+  // (bumped by the Allocate action / build allocation), and the Allocated column + the part-detail
+  // sheet both render exactly this so the two never disagree. BOM demand is a separate signal and
+  // is surfaced via the Coverage pill, not by inflating `allocated`.
   //
   // A part that's never been received has no stock row at all — without a synthetic zero-on-hand
   // row here, placing its first order makes the order vanish from Inventory entirely (nothing to
@@ -925,7 +926,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">On Hand</div>
                                   </div>
                                   <div>
-                                    <div className="text-sm font-semibold">{demandByPartId.get(r.partId) ?? 0}</div>
+                                    <div className="text-sm font-semibold">{r.allocated}</div>
                                     <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Alloc</div>
                                   </div>
                                   <div>
@@ -1019,7 +1020,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                               </div>
                             </TableCell>
                             <TableCell className="px-3 py-2 text-right">{r.onHand}</TableCell>
-                            <TableCell className="hidden sm:table-cell px-3 py-2 text-right">{demandByPartId.get(r.partId) ?? 0}</TableCell>
+                            <TableCell className="hidden sm:table-cell px-3 py-2 text-right">{r.allocated}</TableCell>
                             <TableCell className={cn('px-3 py-2 text-right font-semibold', available < 0 && 'text-destructive')}>
                               {available}
                             </TableCell>
@@ -1129,7 +1130,7 @@ export function InventoryView({ orgId }: InventoryViewProps) {
                                     </div>
                                     <div>
                                       <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="Allocated" /></div>
-                                      <div className="text-sm font-semibold">{demandByPartId.get(r.partId) ?? 0}</div>
+                                      <div className="text-sm font-semibold">{r.allocated}</div>
                                     </div>
                                     <div>
                                       <div className="text-[10px] text-muted-foreground uppercase tracking-wide"><HeaderTip label="Available" /></div>

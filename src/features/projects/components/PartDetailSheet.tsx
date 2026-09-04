@@ -21,7 +21,7 @@ const CATEGORY_ICON_MAP: Record<string, React.ElementType> = { Zap, Cpu, Package
 
 const FIELD_TOOLTIPS: Record<string, string> = {
   'On Hand': 'Physical quantity currently in stock, including anything held in quarantine.',
-  'Allocated': 'Quantity already reserved against BOM demand for planned builds.',
+  'Allocated': 'Quantity reserved against a build via Allocate — committed but not yet issued.',
   'Available': 'On Hand minus Allocated minus Quarantine — what can actually be used right now.',
   'On Order': 'Quantity remaining on open purchase orders, not yet received. Want-to-order items aren’t counted until marked ordered.',
   'Quarantine': 'Held out of Available until released — pending inspection or testing.',
