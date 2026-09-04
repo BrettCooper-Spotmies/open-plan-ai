@@ -87,7 +87,7 @@ function OwnerBadge({ name, size = 'sm' }: { name: string; size?: 'sm' | 'xs' })
 }
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { cn } from '@/lib/utils';
@@ -1329,14 +1329,16 @@ export function BOMView({
   const [filterOpen, setFilterOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [filters, setFilters] = useState<BOMFilters>({ ...EMPTY_FILTERS });
-  // The toolbar's All/Approved/Pending/Rejected quick-tab is a single-select shortcut
-  // over the same status filter the drawer's Status chips edit — it reads/writes
-  // filters.statuses directly instead of keeping its own state, so the two controls
-  // can never disagree (e.g. tab="Approved" + drawer chip="Pending" would otherwise
-  // AND together into an always-empty result with no indication why).
-  const filterStatus: 'all' | BOMStatus = filters.statuses.length === 1 ? filters.statuses[0] : 'all';
-  const setFilterStatus = (id: 'all' | BOMStatus) =>
-    setFilters(f => ({ ...f, statuses: id === 'all' ? [] : [id] }));
+  // The toolbar's All/Approved/Pending/Rejected quick-tab is a multi-select shortcut
+  // over the same status filter the drawer's Status chips edit — both read/write
+  // filters.statuses directly (toggling membership, same as the drawer chips) so the
+  // two controls always reflect the exact same selection and can never disagree.
+  const toggleFilterStatus = (id: BOMStatus) =>
+    setFilters(f => ({
+      ...f,
+      statuses: f.statuses.includes(id) ? f.statuses.filter(s => s !== id) : [...f.statuses, id],
+    }));
+  const clearFilterStatus = () => setFilters(f => ({ ...f, statuses: [] }));
   const [expanded, setExpanded] = useState<Record<string, boolean>>(() => {
     const saved = localStorage.getItem('bom_expanded');
     if (saved) { try { return JSON.parse(saved); } catch { /* ignore */ } }
@@ -1733,19 +1735,22 @@ export function BOMView({
     );
   }
 
-  const Tab = ({ id, label }: { id: 'all' | 'approved' | 'pending' | 'rejected'; label: string }) => (
-    <button
-      onClick={() => setFilterStatus(id)}
-      className={cn(
-        'px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer border transition-colors',
-        filterStatus === id
-          ? 'bg-primary/10 text-primary border-primary/25'
-          : 'text-muted-foreground border-transparent hover:text-foreground'
-      )}
-    >
-      {label}
-    </button>
-  );
+  const Tab = ({ id, label }: { id: 'all' | BOMStatus; label: string }) => {
+    const active = id === 'all' ? filters.statuses.length === 0 : filters.statuses.includes(id);
+    return (
+      <button
+        onClick={() => id === 'all' ? clearFilterStatus() : toggleFilterStatus(id)}
+        className={cn(
+          'px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer border transition-colors',
+          active
+            ? 'bg-primary/10 text-primary border-primary/25'
+            : 'text-muted-foreground border-transparent hover:text-foreground'
+        )}
+      >
+        {label}
+      </button>
+    );
+  };
 
   const ViewBtn = ({ id, icon: Icon, label }: { id: ViewMode; icon: React.ElementType; label: string }) => {
     const active = view === id;
@@ -1891,15 +1896,17 @@ export function BOMView({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border bg-card text-foreground border-border hover:bg-muted cursor-pointer transition-colors">
-                    {filterStatus === 'all' ? 'All' : filterStatus === 'approved' ? 'Approved' : filterStatus === 'pending' ? 'Pending' : 'Rejected'}
+                    {filters.statuses.length === 0 ? 'All'
+                      : filters.statuses.length === 1 ? (filters.statuses[0] === 'approved' ? 'Approved' : filters.statuses[0] === 'pending' ? 'Pending' : 'Rejected')
+                      : `${filters.statuses.length} Statuses`}
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => setFilterStatus('all')}>All</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setFilterStatus('approved')}>Approved</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setFilterStatus('pending')}>Pending</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setFilterStatus('rejected')}>Rejected</DropdownMenuItem>
+                  <DropdownMenuItem onClick={clearFilterStatus}>All</DropdownMenuItem>
+                  <DropdownMenuCheckboxItem checked={filters.statuses.includes('approved')} onCheckedChange={() => toggleFilterStatus('approved')} onSelect={e => e.preventDefault()}>Approved</DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={filters.statuses.includes('pending')} onCheckedChange={() => toggleFilterStatus('pending')} onSelect={e => e.preventDefault()}>Pending</DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={filters.statuses.includes('rejected')} onCheckedChange={() => toggleFilterStatus('rejected')} onSelect={e => e.preventDefault()}>Rejected</DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
