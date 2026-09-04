@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { AppLayoutSkeleton } from '@/components/layout/AppLayoutSkeleton';
-import { categorizeMyDayItems, MyDayItem } from './utils/myDayUtils';
+import { categorizeMyDayItems, getCompletedDate, getItemTags, getReportedDate, MyDayItem } from './utils/myDayUtils';
 import { Task, Issue, TaskStatus, IssueStatus, MyDayGroupBy, MyDayFilter, MyTasksColumnFilters } from '@/types';
 import { useMyDayTasks, useCompletedTodayCount } from '@/hooks/useMyDayTasks';
 import { useUpdateTask, useBatchUpdateTasks, useCreatePersonalTask, useDeleteTask } from '@/hooks/useTasks';
@@ -105,7 +105,7 @@ export default function MyDay() {
     return projects.flatMap(p => p.tasks || []);
   }, [projects]);
 
-  // Column filters (type/status/priority/project/assignedBy/dueDate) apply on top of the date filter
+  // Column filters (type/status/priority/project/assignedBy/dueDate/tags/reportedDate/completedDate) apply on top of the date filter
   const filteredTasks = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return userTasks.filter((item) => {
@@ -136,6 +136,18 @@ export default function MyDay() {
         if (columnFilters.dueDate === 'today' && !item.isDueToday) return false;
         if (columnFilters.dueDate === 'no-date' && item.dueDate) return false;
         if (columnFilters.dueDate === 'upcoming' && (!item.dueDate || item.isOverdue || item.isDueToday)) return false;
+      }
+      if (columnFilters.tags?.length) {
+        const itemTags = getItemTags(item);
+        if (!itemTags.some((tag) => columnFilters.tags!.includes(tag))) return false;
+      }
+      if (columnFilters.reportedDateCustom) {
+        const reportedDate = getReportedDate(item);
+        if (!reportedDate || new Date(reportedDate).toDateString() !== new Date(columnFilters.reportedDateCustom).toDateString()) return false;
+      }
+      if (columnFilters.completedDateCustom) {
+        const completedDate = getCompletedDate(item);
+        if (!completedDate || new Date(completedDate).toDateString() !== new Date(columnFilters.completedDateCustom).toDateString()) return false;
       }
       return true;
     });
