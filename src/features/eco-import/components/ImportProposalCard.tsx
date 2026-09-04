@@ -92,6 +92,12 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
                 {row.owner && <span>Owner: {row.owner}{!row.ownerResolved && ' (unmatched)'}</span>}
                 {row.targetDate && <span>Target: {row.targetDate}</span>}
                 {row.originatingEcr && <span>Ref: {row.originatingEcr}</span>}
+                {row.imageUrl && (
+                  <span className="inline-flex items-center gap-1">
+                    <img src={row.imageUrl} alt="" className="h-4 w-4 rounded object-cover border" loading="lazy" />
+                    Image
+                  </span>
+                )}
               </div>
               {row.issues.length > 0 && (
                 <div

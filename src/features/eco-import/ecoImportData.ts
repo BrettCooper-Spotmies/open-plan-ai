@@ -69,6 +69,8 @@ export interface ImportRowPreview {
   owner: string | null;
   /** true once `owner` matched a real project member — the ECO gets that owner on commit (otherwise it's owned by whoever ran the import). */
   ownerResolved: boolean;
+  /** Image URL from the source file, or null — attached as a linked image on the ECO on commit. */
+  imageUrl: string | null;
   targetDate: string | null;
   /** The source file's own reference ID for this change (e.g. an "ECO ID" column), if any — stored for traceability, never this ECO's real number. */
   originatingEcr: string | null;

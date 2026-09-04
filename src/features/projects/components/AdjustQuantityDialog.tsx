@@ -137,6 +137,9 @@ interface AdjustQuantityDialogProps {
 
 const emptyNewPart = { partNumber: '', name: '', description: '', category: '' as BOMCategory | '', manufacturer: '', mpn: '', unit: 'EA' };
 
+/** Max images that can be attached to a "New transaction" / order. */
+const MAX_IMAGES = 10;
+
 export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onAdjust, onPlaceOrder, initialPartId, partProjects, partDemand, canonicalLocationByPartId }: AdjustQuantityDialogProps) {
   const isMobile = useIsMobile();
   const [selectedRecord, setSelectedRecord] = useState<PickerPart | null>(null);
@@ -304,9 +307,18 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
       toast.error(valid.length === 0 ? 'Please select an image file' : 'Some files were skipped — only images can be attached');
     }
     if (valid.length === 0) return;
-    setImages((prev) => [...prev, ...valid]);
+    const remaining = MAX_IMAGES - images.length;
+    if (remaining <= 0) {
+      toast.error(`You can attach up to ${MAX_IMAGES} images`);
+      return;
+    }
+    const accepted = valid.slice(0, remaining);
+    if (accepted.length < valid.length) {
+      toast.error(`Only ${MAX_IMAGES} images can be attached — some were skipped`);
+    }
+    setImages((prev) => [...prev, ...accepted]);
     setImagePreviewUrls((prev) => {
-      const next = [...prev, ...valid.map((f) => URL.createObjectURL(f))];
+      const next = [...prev, ...accepted.map((f) => URL.createObjectURL(f))];
       imagePreviewUrlsRef.current = next;
       return next;
     });
@@ -1152,8 +1164,14 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {imagePreviewUrls.length > 0 && (
-                        <div className="flex flex-wrap gap-3">
+                      {imagePreviewUrls.length > 0 ? (
+                        <>
+                        <div
+                          onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
+                          onDragLeave={() => setIsDraggingImage(false)}
+                          onDrop={handleImageDrop}
+                          className="flex flex-wrap gap-3"
+                        >
                           {imagePreviewUrls.map((url, i) => (
                             <div key={url} className="relative w-fit">
                               <img
@@ -1172,44 +1190,76 @@ export function AdjustQuantityDialog({ isOpen, onClose, orgId, stock, parts, onA
                               </Button>
                             </div>
                           ))}
+                          {imagePreviewUrls.length < MAX_IMAGES && (
+                            <label
+                              className={cn(
+                                'flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-md border border-dashed cursor-pointer text-muted-foreground transition-colors hover:bg-muted/40',
+                                isDraggingImage ? 'border-primary bg-primary/5' : 'border-input'
+                              )}
+                            >
+                              <Plus className="h-5 w-5" />
+                              <span className="text-[11px] font-medium">Add</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                onChange={handleImageSelect}
+                              />
+                            </label>
+                          )}
+                          {isMobile && imagePreviewUrls.length < MAX_IMAGES && (
+                            <button
+                              type="button"
+                              onClick={handleOpenCamera}
+                              className="flex h-24 w-24 flex-col items-center justify-center gap-1 rounded-md border border-dashed border-input cursor-pointer text-muted-foreground transition-colors hover:bg-muted/40"
+                            >
+                              <Camera className="h-5 w-5" />
+                              <span className="text-[11px] font-medium">Take photo</span>
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          {imagePreviewUrls.length} / {MAX_IMAGES} images
+                        </p>
+                        </>
+                      ) : (
+                        <div
+                          onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
+                          onDragLeave={() => setIsDraggingImage(false)}
+                          onDrop={handleImageDrop}
+                          className={cn(
+                            'flex flex-col items-center justify-center gap-2 rounded-md border border-dashed text-center transition-colors px-4 py-6',
+                            isDraggingImage ? 'border-primary bg-primary/5' : 'border-input'
+                          )}
+                        >
+                          <ImagePlus className="h-5 w-5 text-muted-foreground" />
+                          <p className="text-sm text-muted-foreground">Drag &amp; drop images here</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors">
+                              <Upload className="h-3.5 w-3.5" />
+                              Browse files
+                              <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                onChange={handleImageSelect}
+                              />
+                            </label>
+                            {isMobile && (
+                              <button
+                                type="button"
+                                onClick={handleOpenCamera}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
+                              >
+                                <Camera className="h-3.5 w-3.5" />
+                                Take photo
+                              </button>
+                            )}
+                          </div>
                         </div>
                       )}
-                      <div
-                        onDragOver={(e) => { e.preventDefault(); setIsDraggingImage(true); }}
-                        onDragLeave={() => setIsDraggingImage(false)}
-                        onDrop={handleImageDrop}
-                        className={cn(
-                          'flex flex-col items-center justify-center gap-2 rounded-md border border-dashed text-center transition-colors',
-                          imagePreviewUrls.length > 0 ? 'px-4 py-4' : 'px-4 py-6',
-                          isDraggingImage ? 'border-primary bg-primary/5' : 'border-input'
-                        )}
-                      >
-                        <ImagePlus className="h-5 w-5 text-muted-foreground" />
-                        <p className="text-sm text-muted-foreground">
-                          {imagePreviewUrls.length > 0 ? 'Drag & drop to add more images' : 'Drag & drop images here'}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors">
-                            <Upload className="h-3.5 w-3.5" />
-                            Browse files
-                            <input
-                              type="file"
-                              accept="image/*"
-                              multiple
-                              className="hidden"
-                              onChange={handleImageSelect}
-                            />
-                          </label>
-                          <button
-                            type="button"
-                            onClick={handleOpenCamera}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md border cursor-pointer text-xs font-medium text-muted-foreground hover:bg-muted/40 transition-colors"
-                          >
-                            <Camera className="h-3.5 w-3.5" />
-                            Take photo
-                          </button>
-                        </div>
-                      </div>
                     </div>
                   )}
                 </div>
