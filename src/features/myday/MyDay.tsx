@@ -320,7 +320,7 @@ export default function MyDay() {
               <TabsList className="h-9 p-1 shrink-0 gap-2">
                 <TabsTrigger value="today" className="relative px-3.5 sm:px-4 text-xs sm:text-sm shrink-0">
                   My Day
-                  {todayActiveCount > 0 && filter !== 'today' && (
+                  {todayActiveCount > 0 && (
                     <span className="absolute -top-1.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground leading-none z-10 shadow-xs">
                       {todayActiveCount}
                     </span>
@@ -328,7 +328,7 @@ export default function MyDay() {
                 </TabsTrigger>
                 <TabsTrigger value="overdue" className="relative px-3.5 sm:px-4 text-xs sm:text-sm shrink-0">
                   Overdue
-                  {overdueTasks.length > 0 && filter !== 'overdue' && (
+                  {overdueTasks.length > 0 && (
                     <span className="absolute -top-1.5 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold text-destructive-foreground leading-none z-10 shadow-xs">
                       {overdueTasks.length}
                     </span>
