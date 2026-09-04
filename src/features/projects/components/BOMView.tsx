@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Layers, Search, Filter, List, LayoutGrid, Share2,
@@ -1162,9 +1162,8 @@ function GridBreadcrumb({ path, onJump }: { path: BOMNode[]; onJump: (depth: num
   );
 }
 
-function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCurrency }: { rows: BOMNode[]; rootNodes: BOMNode[]; filtersActive: boolean; onOpen: (id: string) => void; totalCount: number; formatCurrency: (n: number) => string }) {
+function GridView({ rows, rootNodes, filtersActive, onOpen, totalCount, formatCurrency, drillPath, setDrillPath }: { rows: BOMNode[]; rootNodes: BOMNode[]; filtersActive: boolean; onOpen: (id: string) => void; totalCount: number; formatCurrency: (n: number) => string; drillPath: BOMNode[]; setDrillPath: Dispatch<SetStateAction<BOMNode[]>> }) {
   const [hovered, setHovered] = useState<string | null>(null);
-  const [drillPath, setDrillPath] = useState<BOMNode[]>([]);
 
   const current = drillPath[drillPath.length - 1];
   const displayRows = filtersActive ? rows : (current?.children ?? rootNodes);
@@ -1326,6 +1325,10 @@ export function BOMView({
   const [search, setSearch] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<BOMNode | null>(null);
   const [view, setView] = useState<ViewMode>(() => (localStorage.getItem('bom_view') as ViewMode) ?? 'list');
+  // Lifted out of GridView so drilling into a sub-component survives switching to
+  // List/Map and back — GridView is unmounted/remounted on each toggle since it's
+  // only rendered while view === 'grid'.
+  const [gridDrillPath, setGridDrillPath] = useState<BOMNode[]>([]);
   const [filterOpen, setFilterOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [filters, setFilters] = useState<BOMFilters>({ ...EMPTY_FILTERS });
@@ -2020,7 +2023,7 @@ export function BOMView({
         </>
       )}
       {view === 'grid' && (
-        <GridView rows={gridRows} rootNodes={rootNodes} filtersActive={filtersActive} onOpen={setSelected} totalCount={totalCount} formatCurrency={formatCurrency} />
+        <GridView rows={gridRows} rootNodes={rootNodes} filtersActive={filtersActive} onOpen={setSelected} totalCount={totalCount} formatCurrency={formatCurrency} drillPath={gridDrillPath} setDrillPath={setGridDrillPath} />
       )}
       {view === 'map' && (
         <BOMMapView nodes={rootNodes} onOpen={setSelected} pred={pred} filtersActive={filtersActive} />
