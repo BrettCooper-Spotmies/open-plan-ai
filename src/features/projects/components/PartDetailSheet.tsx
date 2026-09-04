@@ -209,7 +209,9 @@ export function PartDetailSheet({
       rows.push({ location: secondSite, label: 'Allocated', qty: record.allocated, color: '#2563EB' });
     }
     if (record.quarantineQty) rows.push({ location: 'Quarantine', label: 'Quarantine', qty: record.quarantineQty, color: '#D97706' });
-    if (rows.length === 0) rows.push({ location: record.location, label: 'On hand', qty: record.onHand, color: '#16A34A' });
+    if (rows.length === 0 && record.onHand > 0) {
+      rows.push({ location: record.location, label: 'On hand', qty: record.onHand, color: '#16A34A' });
+    }
     return rows;
   }, [record]);
 
@@ -297,7 +299,16 @@ export function PartDetailSheet({
     </>
   );
 
-  const quarantineRelease = (record.quarantineQty ?? 0) > 0 ? (
+  // Stock quarantined only because it sits in a location named "Quarantine" can't be
+  // released by decrementing a column — it has to be transferred out to a normal location —
+  // so show a hint pointing at Transfer instead of the qty-release control.
+  const quarantineRelease = (record.quarantineQty ?? 0) > 0 && record.quarantineByLocation ? (
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+      <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600">
+        <ShieldAlert className="h-3.5 w-3.5" /> {record.quarantineQty} held in the Quarantine location — use Transfer to move it to usable stock
+      </div>
+    </div>
+  ) : (record.quarantineQty ?? 0) > 0 ? (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
       <div className="flex items-center gap-1.5 text-xs font-medium text-amber-600">
         <ShieldAlert className="h-3.5 w-3.5" /> {record.quarantineQty} in quarantine
@@ -438,7 +449,9 @@ export function PartDetailSheet({
 
           <SectionCard title="Stock by location" count={stockRows.length} bodyClassName="p-3 space-y-2">
             {stockRows.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">No stock on hand.</p>
+              <p className="py-4 text-center text-sm text-muted-foreground">
+                {record.onOrder > 0 ? 'No stock on hand yet — order not received.' : 'No stock on hand.'}
+              </p>
             ) : stockRows.map((row) => (
               <div
                 key={`${row.location}-${row.label}`}

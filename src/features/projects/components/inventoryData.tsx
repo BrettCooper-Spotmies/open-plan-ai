@@ -38,6 +38,11 @@ export interface StockRecord {
   lotNumber?: string;
   serialNumber?: string;
   quarantineQty?: number;
+  /** True when this row's on-hand is quarantined purely because its location is named
+   * "Quarantine" (see isQuarantineLocation), as opposed to a real received-under-quarantine
+   * flag. Such stock can't be "released" by decrementing a column — it has to be transferred
+   * out to a normal location — so the release affordance is hidden for it. */
+  quarantineByLocation?: boolean;
   imageUrl?: string;   // part photo, when the catalog entry has one — falls back to a category icon
   createdAt: string;   // ISO — when this (part, location) stock row was first created; earliest row = the part's canonical location
 }
@@ -400,6 +405,16 @@ export const REASON_CODES = [
   'Returned to supplier',
   'Consumed outside system',
 ] as const;
+
+/**
+ * A stock row whose location is literally named "Quarantine" (see STOCK_LOCATIONS — it's a
+ * free-text location, org-owned) is treated as fully quarantined stock: its on-hand feeds the
+ * Quarantine figures and is held out of Available, exactly as if it had been received under
+ * the quarantine flag. This bridges the "Quarantine" location with the quarantineQty concept
+ * so the two never disagree. The fold happens once, in the fromApiStock adapter.
+ */
+export const isQuarantineLocation = (loc: string | null | undefined): boolean =>
+  (loc ?? '').trim().toLowerCase() === 'quarantine';
 
 export const availableOf = (r: StockRecord): number => r.onHand - r.allocated - (r.quarantineQty ?? 0);
 
