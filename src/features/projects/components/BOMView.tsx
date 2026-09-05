@@ -705,9 +705,9 @@ function FilterDrawer({ open, filters, setFilters, onClose, facets, currencySymb
 
           <Section title="Status" icon={CheckCircle2} count={draft.statuses.length}>
             <div className="flex gap-2 flex-wrap">
-              {(['approved', 'pending', 'rejected'] as const).map(s => (
+              {(['approved', 'pending', 'rejected', 'draft'] as const).map(s => (
                 <Chip key={s} active={draft.statuses.includes(s)} onClick={() => toggle('statuses', s)}>
-                  {s === 'approved' ? 'Approved' : s === 'pending' ? 'Pending' : 'Rejected'}
+                  {s === 'approved' ? 'Approved' : s === 'pending' ? 'Pending' : s === 'rejected' ? 'Rejected' : 'Draft'}
                 </Chip>
               ))}
             </div>
@@ -1878,6 +1878,7 @@ export function BOMView({
           <Tab id="approved" label="Approved" />
           <Tab id="pending" label="Pending" />
           <Tab id="rejected" label="Rejected" />
+          <Tab id="draft" label="Draft" />
 
           <div className="flex-1" />
 
@@ -1976,7 +1977,7 @@ export function BOMView({
                 <DropdownMenuTrigger asChild>
                   <button className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium border bg-card text-foreground border-border hover:bg-muted cursor-pointer transition-colors">
                     {filters.statuses.length === 0 ? 'All'
-                      : filters.statuses.length === 1 ? (filters.statuses[0] === 'approved' ? 'Approved' : filters.statuses[0] === 'pending' ? 'Pending' : 'Rejected')
+                      : filters.statuses.length === 1 ? (filters.statuses[0] === 'approved' ? 'Approved' : filters.statuses[0] === 'pending' ? 'Pending' : filters.statuses[0] === 'rejected' ? 'Rejected' : 'Draft')
                       : `${filters.statuses.length} Statuses`}
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
@@ -1986,6 +1987,7 @@ export function BOMView({
                   <DropdownMenuCheckboxItem checked={filters.statuses.includes('approved')} onCheckedChange={() => toggleFilterStatus('approved')} onSelect={e => e.preventDefault()}>Approved</DropdownMenuCheckboxItem>
                   <DropdownMenuCheckboxItem checked={filters.statuses.includes('pending')} onCheckedChange={() => toggleFilterStatus('pending')} onSelect={e => e.preventDefault()}>Pending</DropdownMenuCheckboxItem>
                   <DropdownMenuCheckboxItem checked={filters.statuses.includes('rejected')} onCheckedChange={() => toggleFilterStatus('rejected')} onSelect={e => e.preventDefault()}>Rejected</DropdownMenuCheckboxItem>
+                  <DropdownMenuCheckboxItem checked={filters.statuses.includes('draft')} onCheckedChange={() => toggleFilterStatus('draft')} onSelect={e => e.preventDefault()}>Draft</DropdownMenuCheckboxItem>
                 </DropdownMenuContent>
               </DropdownMenu>
 
