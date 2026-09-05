@@ -15,7 +15,8 @@ import { useBomTree, useCreateBomNode, useDeleteBomNode, useAddRequirement, useP
 import { useCreatePart, useUpdatePart } from '@/hooks/useParts';
 import { useProjectDetail } from '@/hooks/useProjectDetail';
 import { useAuth } from '@/contexts/AuthContext';
-import { uploadBomDocumentFile, addBomDocumentLink } from '@/hooks/useBomDocuments';
+import { uploadBomDocumentFile, addBomDocumentLink, deleteBomDocument } from '@/hooks/useBomDocuments';
+import { queryClient as rqClient } from '@/lib/queryClient';
 import { bomService } from '@/services/bom.service';
 import { downloadBomCsv } from '@/features/reports/utils/exportUtils';
 import { createBomWorkbook, downloadExcelFile } from '@/utils/excelExport';
@@ -25,7 +26,9 @@ import type { BOMApprovalRequest } from './bomData';
 // part catalog row so Inventory can show it) — undefined when the photo wasn't
 // touched, null when the user explicitly removed it.
 async function saveBomDocs(nodeId: string, payload: BOMPartPayload): Promise<{ photoUrl?: string | null }> {
-  const otherDocs = [...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])].filter(Boolean) as DocValue[];
+  // Already-existing attachments are kept as-is — only new files/links need to be created.
+  const otherDocs = [...(payload.docDatasheet ?? []), ...(payload.doc3DModel ?? []), ...(payload.docFootprint ?? []), ...(payload.docCustom ?? [])]
+    .filter((d): d is DocValue => !!d && d.kind !== 'existing');
   const uploads = Promise.allSettled(
     otherDocs.map(d => d.kind === 'file' ? uploadBomDocumentFile(nodeId, d.file) : addBomDocumentLink(nodeId, d.url, d.fileName ?? undefined)),
   );
@@ -42,6 +45,14 @@ async function saveBomDocs(nodeId: string, payload: BOMPartPayload): Promise<{ p
   }
 
   await uploads;
+
+  // Attachments (photo or tech file) the user removed or replaced in this edit — delete
+  // them server-side so they don't linger as orphaned documents.
+  if (payload.docsRemovedIds?.length) {
+    await Promise.allSettled(payload.docsRemovedIds.map(id => deleteBomDocument(id)));
+  }
+  rqClient.invalidateQueries({ queryKey: ['bom-documents', nodeId] });
+
   return { photoUrl };
 }
 
