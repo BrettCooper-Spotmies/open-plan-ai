@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { ConfirmationDialog } from '@/components/ui/ConfirmationDialog';
-import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, bomCountAll, describeDeleteImpact, fromApiRevision, formatLeadTime, getCategoryMeta, type BOMApprovalRequestScope } from './bomData';
+import { BOMNode, BOMRevision, BOM_CAT_META, bomPath, bomTypeOf, bomCountAll, describeDeleteImpact, fromApiRevision, formatLeadTime, formatRevisionDate, resolveRevisionAuthor, getCategoryMeta, type BOMApprovalRequestScope } from './bomData';
 import { BOMStatusPill, ReqTag, PartThumb, PartImageThumb, ImageViewerModal } from './BOMShared';
 import { BOMPartSheet, BOMPartPayload, DocValue } from './BOMPartSheet';
 import { BOMECOSheet } from './BOMECOSheet';
@@ -379,10 +379,12 @@ function RevisionToggle({
   revHistory,
   activeIdx,
   onChange,
+  nodeAuthor,
 }: {
   revHistory: BOMRevision[];
   activeIdx: number;
   onChange: (idx: number) => void;
+  nodeAuthor?: string;
 }) {
   const [open, setOpen] = useState(false);
   const { formatCurrency } = useCurrency();
@@ -455,7 +457,7 @@ function RevisionToggle({
                   </div>
                   <div className="text-[11px] text-muted-foreground truncate">{r.changes}</div>
                   <div className="text-[10px] text-muted-foreground/60 mt-0.5">
-                    {r.date} · {r.author} · {formatCurrency(r.price)}
+                    {formatRevisionDate(r.date)} · Revised by {resolveRevisionAuthor(r.author, nodeAuthor)} · {formatCurrency(r.price)}
                   </div>
                 </div>
               </button>
@@ -877,6 +879,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                       revHistory={revHistory}
                       activeIdx={activeRevIdx}
                       onChange={setActiveRevIdx}
+                      nodeAuthor={originalNode.createdByName || originalNode.owner}
                     />
                   </div>
                   <div className="text-xs font-mono text-muted-foreground mb-1">{node.pn}</div>
@@ -1278,7 +1281,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                               </div>
                               <div className="text-[11.5px] text-muted-foreground leading-snug">{r.changes}</div>
                               <div className="text-[10.5px] text-muted-foreground/60 mt-0.5">
-                                {r.date} · {r.author}
+                                {formatRevisionDate(r.date)} · Revised by {resolveRevisionAuthor(r.author, originalNode.createdByName || originalNode.owner)}
                               </div>
                             </div>
                           </div>
