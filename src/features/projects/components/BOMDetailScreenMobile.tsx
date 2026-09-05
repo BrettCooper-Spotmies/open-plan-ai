@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { FilePreviewDialog, FilePreviewTarget } from '@/components/FilePreviewDialog';
 import { resolveFileUrl } from '@/utils/fileUrl';
-import { BOMNode, BOMRevision, BOMApproval, BOMApprovalRequest, BOMStatus, formatLeadTime } from './bomData';
+import { BOMNode, BOMRevision, BOMApproval, BOMApprovalRequest, BOMStatus, formatLeadTime, formatRevisionDate, resolveRevisionAuthor } from './bomData';
 import { ReqTag, PartThumb, PartImageThumb } from './BOMShared';
 import { BOMApprovalReviewCard } from './BOMApprovalReviewCard';
 import { useBomNotes, useAddBomNote, useDeleteBomNote } from '@/hooks/useBomNotes';
@@ -179,8 +179,8 @@ function PersonTag({ name, muted }: { name?: string | null; muted?: boolean }) {
 
 // ── Revision History row (tap to select + expand; selection drives the
 // Specifications/Overview cards above, same activeRevIdx as desktop) ──
-function RevisionRow({ r, isActive, isLatestRev, onSelect }: {
-  r: BOMRevision; isActive: boolean; isLatestRev: boolean; onSelect: () => void;
+function RevisionRow({ r, isActive, isLatestRev, onSelect, nodeAuthor }: {
+  r: BOMRevision; isActive: boolean; isLatestRev: boolean; onSelect: () => void; nodeAuthor?: string;
 }) {
   const { eco, lines } = parseChanges(r.changes);
   return (
@@ -195,7 +195,7 @@ function RevisionRow({ r, isActive, isLatestRev, onSelect }: {
           </span>
         )}
         {eco && <span className="text-[11px] font-mono font-medium text-primary truncate">{eco}</span>}
-        <span className="ml-auto text-[11px] text-muted-foreground shrink-0 tabular-nums">{r.date || '—'}</span>
+        <span className="ml-auto text-[11px] text-muted-foreground shrink-0 tabular-nums">{formatRevisionDate(r.date)}</span>
         <ChevronDown className={cn('w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform', isActive && 'rotate-180')} />
       </button>
       {isActive && (
@@ -208,7 +208,7 @@ function RevisionRow({ r, isActive, isLatestRev, onSelect }: {
           )) : (
             <div className="text-[11.5px] text-muted-foreground">No additional details.</div>
           )}
-          <div className="text-[10.5px] text-muted-foreground/60 pt-0.5">By {r.author || 'Unknown'}</div>
+          <div className="text-[10.5px] text-muted-foreground/60 pt-0.5">Revised by {resolveRevisionAuthor(r.author, nodeAuthor)}</div>
         </div>
       )}
     </div>
@@ -789,6 +789,7 @@ export function BOMDetailScreenMobile({
                         isLatestRev={origIdx === revHistory.length - 1}
                         isActive={origIdx === activeRevIdx}
                         onSelect={() => onSelectRevision(origIdx)}
+                        nodeAuthor={node.createdByName || node.owner}
                       />
                     );
                   })}
