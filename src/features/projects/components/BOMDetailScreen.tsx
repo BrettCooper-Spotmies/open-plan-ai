@@ -981,12 +981,12 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
 
             {/* Info row */}
             <div className="mx-6 mb-5 px-4 py-3.5 bg-card border border-border rounded-xl grid gap-4"
-              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
+              style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
               <Field label="Part Number" mono>{node.pn}</Field>
               <Field label="Part Name">{node.name}</Field>
               <Field label="MPN" mono>{node.mpn}</Field>
               <Field label="Manufacturer">{node.manufacturer}</Field>
-              <Field label="Supplier">{node.distributor}</Field>
+              <Field label="Supplier" mono>{node.distributor}</Field>
               <Field label="Quantity">{node.qty} {node.uom}</Field>
               {node.designators && <Field label="Designators" mono>{node.designators}</Field>}
               <Field label="Unit Price">{formatCurrency(node.price)}</Field>
