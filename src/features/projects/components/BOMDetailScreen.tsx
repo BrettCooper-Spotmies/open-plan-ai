@@ -3,10 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
-  ArrowLeft, GitMerge, SquarePen, ChevronRight, Factory, Hash,
-  Truck, DollarSign, Tag, Clock, FileText, Box, Cpu, Image, Package,
-  ChevronDown, Check, History, User, MessageSquare, Send, Trash2, Pencil,
-  Plus, Boxes, FileSpreadsheet, XCircle, Loader2, ShieldCheck, Sliders, RefreshCw,
+  ArrowLeft, GitMerge, SquarePen, ChevronRight, Truck,
+  ChevronDown, Check, History, MessageSquare, Send, Trash2, Pencil,
+  Plus, Boxes, FileSpreadsheet, XCircle, Loader2, ShieldCheck, RefreshCw,
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -369,10 +368,6 @@ const Card = ({ title, action, children, noPad }: {
     <div className={noPad ? '' : 'p-4'}>{children}</div>
   </div>
 );
-
-const ICON_MAP: Record<string, React.ElementType> = {
-  Factory, Hash, Truck, DollarSign, Tag, Clock, FileText, Box, Cpu, Image, Package, User,
-};
 
 // ── Version toggle popover ─────────────────────────────────────────
 function RevisionToggle({
@@ -1151,16 +1146,14 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   </Card>
                 )}
 
-                {/* Requirements traceability */}
-                <Card title="Requirements Traceability">
-                  {node.req.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">No requirements linked to this part.</p>
-                  ) : (
+                {/* Requirements traceability — hidden when nothing is linked */}
+                {node.req.length > 0 && (
+                  <Card title="Requirements Traceability">
                     <div className="flex gap-2 flex-wrap">
                       {node.req.map(r => <ReqTag key={r} label={r} />)}
                     </div>
-                  )}
-                </Card>
+                  </Card>
+                )}
 
                 {/* Notes */}
                 <NotesCard nodeId={node.id} currentUserId={user?.id} currentUserName={user?.name} currentUserInitials={user?.initials} />
@@ -1168,49 +1161,40 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
 
               {/* RIGHT */}
               <div className="flex flex-col gap-4 min-w-0">
-                {/* Sourcing */}
-                {/* <Card title="Sourcing">
-              <div className="flex flex-col gap-3">
-                {[
-                  { label: 'Manufacturer', value: node.manufacturer, icon: 'Factory' },
-                  { label: 'Manufacturer PN', value: node.mpn, icon: 'Hash', mono: true },
-                  { label: 'Supplier', value: node.distributor, icon: 'Truck' },
-                  { label: 'Unit Price', value: formatCurrency(node.price), icon: 'DollarSign' },
-                  { label: 'Extended Price', value: `${formatCurrency(extended)} · ${node.qty} ${node.uom}`, icon: 'Tag' },
-                  { label: 'Lead Time', value: formatLeadTime(node.leadTime), icon: 'Clock' },
-                  { label: 'Handled By', value: node.owner, icon: 'User' },
-                ].map((r, i) => {
-                  const Ic = ICON_MAP[r.icon] ?? Package;
-                  return (
-                    <div key={i} className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0">
-                        <Ic className="w-3.5 h-3.5 text-muted-foreground" />
-                      </div>
-                      <span className="text-xs text-muted-foreground flex-1">{r.label}</span>
-                      <span className={`text-sm font-medium text-foreground text-right whitespace-nowrap ${(r as any).mono ? 'font-mono' : ''}`}>
-                        {r.value}
+                {/* Sourcing — full supplier list for the active revision */}
+                {Array.isArray(node.suppliers) && node.suppliers.length > 0 && (
+                  <Card
+                    title="Sourcing"
+                    action={
+                      <span className="text-[11px] text-muted-foreground">
+                        {node.suppliers.length} supplier{node.suppliers.length !== 1 ? 's' : ''}
                       </span>
-                    </div>
-                  );
-                })}
-                {Array.isArray(node.customFields) && node.customFields.length > 0 && (
-                  <>
-                    <div className="border-t border-border/50 pt-2 mt-1">
-                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 mb-2">Additional Fields</p>
-                      {node.customFields.map((cf, i) => (
-                        <div key={i} className="flex items-center gap-3 mb-2 last:mb-0">
+                    }
+                  >
+                    <div className="flex flex-col gap-2.5">
+                      {node.suppliers.map((s, i) => (
+                        <div key={i} className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-lg bg-muted border border-border flex items-center justify-center shrink-0">
-                            <Sliders className="w-3.5 h-3.5 text-muted-foreground" />
+                            <Truck className="w-3.5 h-3.5 text-muted-foreground" />
                           </div>
-                          <span className="text-xs text-muted-foreground flex-1">{cf.label}</span>
-                          <span className="text-sm font-medium text-foreground text-right">{cf.value}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[10px] uppercase tracking-wider text-muted-foreground/60">
+                              Supplier {i + 1}
+                            </div>
+                            <div className="text-sm font-medium text-foreground truncate">
+                              {s.distributor || '—'}
+                            </div>
+                          </div>
+                          <span className="text-sm font-medium text-foreground text-right whitespace-nowrap tabular-nums">
+                            {s.calcFromSubparts
+                              ? 'Calc. from sub-parts'
+                              : formatCurrency(parseFloat(s.price) || 0)}
+                          </span>
                         </div>
                       ))}
                     </div>
-                  </>
+                  </Card>
                 )}
-              </div>
-            </Card> */}
 
                 {/* Revision History */}
                 <Card
@@ -1367,7 +1351,8 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                   )}
                 </Card>
 
-                {/* Hierarchy */}
+                {/* Hierarchy — hidden for a standalone part with no parent chain */}
+                {path.length > 1 && (
                 <Card title="Hierarchy">
                   <div className="flex flex-col">
                     {path.map((p, i) => {
@@ -1391,11 +1376,14 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     })}
                   </div>
                 </Card>
+                )}
 
                 {/* Documents */}
                 <BOMDocuments nodeId={originalNode.id} />
 
-                {/* Engineering Changes referencing this part */}
+                {/* Engineering Changes referencing this part — hidden when none
+                    and not loading, to save vertical space */}
+                {(relatedEcosLoading || relatedEcos.length > 0) && (
                 <Card
                   title="Engineering Changes"
                   action={relatedEcos.length > 0 && (
@@ -1407,10 +1395,6 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     <div className="p-4 flex flex-col gap-2">
                       <Skeleton className="h-9 w-full rounded-lg" />
                       <Skeleton className="h-9 w-full rounded-lg" />
-                    </div>
-                  ) : relatedEcos.length === 0 ? (
-                    <div className="p-4 text-xs text-muted-foreground text-center">
-                      No ECOs reference this part yet
                     </div>
                   ) : (
                     <div className="flex flex-col divide-y divide-border">
@@ -1438,6 +1422,7 @@ export function BOMDetailScreen({ node: originalNode, rootNodes, orgId, projectI
                     </div>
                   )}
                 </Card>
+                )}
               </div>
             </div>
           </div>
