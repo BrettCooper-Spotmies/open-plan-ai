@@ -242,7 +242,7 @@ const Notifications = () => {
                                         <Trash2 className="h-4 w-4 mr-2" />
                                         Clear read notifications
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => navigate('/settings?tab=notifications')}>
                                         <BellOff className="h-4 w-4 mr-2" />
                                         Notification settings
                                     </DropdownMenuItem>
@@ -279,7 +279,9 @@ const Notifications = () => {
                                             onClick={() => {
                                                 handleMarkAsRead(notification.id);
                                                 if (notification.actionUrl) {
-                                                    navigate(notification.actionUrl);
+                                                    navigate(notification.actionUrl, {
+                                                        state: { backTo: '/notifications' },
+                                                    });
                                                 }
                                             }}
                                         >

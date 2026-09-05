@@ -1,6 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { AlertCircle, XCircle, CheckCircle2, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
+import { AlertCircle, XCircle, CheckCircle2, Loader2, ChevronDown, ChevronUp, Video } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import type { ImportProposalPreview, CommitImportResult } from '../taskImportData';
@@ -88,6 +88,18 @@ export function ImportProposalCard({ preview, status, result, onCommit, committi
                 {row.assigneeName && <span>Assignee: {row.assigneeName}</span>}
                 {row.dueDate && <span>Due: {row.dueDate}</span>}
                 {row.milestoneName && <span>Milestone: {row.milestoneName}</span>}
+                {row.imageUrl && (
+                  <span className="inline-flex items-center gap-1">
+                    <img src={row.imageUrl} alt="" className="h-4 w-4 rounded object-cover border" loading="lazy" />
+                    Image
+                  </span>
+                )}
+                {row.videoUrl && (
+                  <span className="inline-flex items-center gap-1">
+                    <Video className="h-3.5 w-3.5" />
+                    Video
+                  </span>
+                )}
               </div>
               {row.issues.length > 0 && (
                 <div

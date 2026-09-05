@@ -30,6 +30,10 @@ export interface ImportRowPreview {
   dueDate: string | null;
   status: string | null;
   moduleName: string | null;
+  /** Image URL from the source file, or null — attached as a linked image on the issue on commit. */
+  imageUrl: string | null;
+  /** Video URL from the source file, or null — becomes one entry in the issue's videoLinks on commit. */
+  videoUrl: string | null;
   issues: string[];
   /** false only when the row is missing its required title (or was explicitly skipped in chat) — every other issue is informational and still imports. */
   importable: boolean;

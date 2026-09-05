@@ -171,7 +171,11 @@ function ErrorBanner({ message, onDismiss }: { message: string; onDismiss: () =>
 }
 
 // ── Main component ─────────────────────────────────────────────────
-export function BOMDocuments({ nodeId }: { nodeId: string }) {
+// `photoUrl` is the part's explicitly-set product photo (part.imageUrl). The attachment
+// backing it is managed from the Edit Part dialog's dedicated Product Photo widget, so it's
+// excluded here — deleting it from this generic file list would silently break the part's
+// photo everywhere else (BOM rows, thumbnails) without updating part.imageUrl.
+export function BOMDocuments({ nodeId, photoUrl }: { nodeId: string; photoUrl?: string | null }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploadingFile, setUploadingFile] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -182,27 +186,44 @@ export function BOMDocuments({ nodeId }: { nodeId: string }) {
   const upload = useUploadBomDocument(nodeId);
   const remove = useDeleteBomDocument(nodeId);
 
-  const attachments = docs ?? [];
+  const attachments = (docs ?? []).filter(d => !photoUrl || d.fileUrl !== photoUrl);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    // Reset input so the same file can be re-selected
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    // Reset input so the same file(s) can be re-selected
     e.target.value = '';
 
-    if (file.size > 50 * 1024 * 1024) {
-      setError('File is too large (max 50 MB)');
-      return;
+    const tooBig = files.filter((f) => f.size > 50 * 1024 * 1024);
+    const toUpload = files.filter((f) => f.size <= 50 * 1024 * 1024);
+    if (tooBig.length > 0) {
+      setError(
+        tooBig.length === files.length
+          ? 'File is too large (max 50 MB)'
+          : `Skipped ${tooBig.length} file(s) over the 50 MB limit`,
+      );
+    } else {
+      setError(null);
     }
+    if (toUpload.length === 0) return;
 
-    setError(null);
-    setUploadingFile(file.name);
-    try {
-      await upload.mutateAsync(file);
-    } catch {
-      setError(`Failed to upload "${file.name}". Please try again.`);
-    } finally {
-      setUploadingFile(null);
+    // Upload sequentially so the "uploading <name>" indicator tracks progress.
+    const failed: string[] = [];
+    for (const file of toUpload) {
+      setUploadingFile(file.name);
+      try {
+        await upload.mutateAsync(file);
+      } catch {
+        failed.push(file.name);
+      }
+    }
+    setUploadingFile(null);
+    if (failed.length > 0) {
+      setError(
+        failed.length === 1
+          ? `Failed to upload "${failed[0]}". Please try again.`
+          : `Failed to upload ${failed.length} files. Please try again.`,
+      );
     }
   };
 
@@ -244,6 +265,7 @@ export function BOMDocuments({ nodeId }: { nodeId: string }) {
         <input
           ref={fileRef}
           type="file"
+          multiple
           className="hidden"
           onChange={handleFileChange}
           accept="*/*"

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Bell, CheckCircle2, AlertCircle, FolderKanban, Clock, Activity, MessageSquare, UserMinus, UserPlus } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Bell, CheckCircle2, AlertCircle, FolderKanban, Clock, Activity, MessageSquare, UserMinus, UserPlus, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -42,6 +42,7 @@ const getNotificationIcon = (type: AppNotification['type']) => {
 export function NotificationsPopover() {
     const [open, setOpen] = useState(false);
     const navigate = useNavigate();
+    const location = useLocation();
     const isMobile = useIsMobile();
     const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
@@ -95,16 +96,30 @@ export function NotificationsPopover() {
                             </span>
                         )}
                     </div>
-                    {unreadCount > 0 && (
+                    <div className="flex items-center gap-1">
+                        {unreadCount > 0 && (
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs h-7 text-muted-foreground hover:text-foreground"
+                                onClick={handleMarkAllAsRead}
+                            >
+                                Mark all as read
+                            </Button>
+                        )}
                         <Button
                             variant="ghost"
-                            size="sm"
-                            className="text-xs h-7 text-muted-foreground hover:text-foreground"
-                            onClick={handleMarkAllAsRead}
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            title="Notification settings"
+                            onClick={() => {
+                                setOpen(false);
+                                navigate('/settings?tab=notifications');
+                            }}
                         >
-                            Mark all as read
+                            <Settings className="h-3.5 w-3.5" />
                         </Button>
-                    )}
+                    </div>
                 </div>
 
                 <div className="max-h-[400px] overflow-y-auto">
@@ -129,7 +144,9 @@ export function NotificationsPopover() {
                                         handleMarkAsRead(notification.id);
                                         setOpen(false);
                                         if (notification.actionUrl) {
-                                            navigate(notification.actionUrl);
+                                            navigate(notification.actionUrl, {
+                                                state: { backTo: location.pathname + location.search },
+                                            });
                                         }
                                     }}
                                 >
