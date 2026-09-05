@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { Flag, AlertTriangle, Users, Calendar, Search, X, Plus, Filter, User, Clock, LayoutGrid, List, Loader2, MessageCircle, Trash2, Upload, Download, Tag, ChevronDown, FolderOpen } from 'lucide-react';
 import { BOMView } from './components/BOMView';
 import RequirementsView from './components/RequirementsView';
@@ -568,7 +568,13 @@ export default function ProjectDetail() {
   const { currentOrganization } = useOrganization();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const { id, tab: tabParam, partId, ecoId, taskId, moduleId, milestoneId, issueId } = useParams();
+  // When a deep-linked entity modal (e.g. /issues/:issueId) is opened from an
+  // external entry point like Notifications, the linker passes `backTo` in
+  // location.state so closing the modal returns there instead of dropping the
+  // user onto the project's default tab for that entity.
+  const deepLinkBackTo = (location.state as { backTo?: string } | null)?.backTo;
   const isSupportFeatureEnabled = useFeatureTogglesStore((s) => s.enabled.support);
 
   // The /bom/:partId, /eng-changes/:ecoId, /tasks/:taskId, /modules/:moduleId,
@@ -2042,7 +2048,7 @@ export default function ProjectDetail() {
           task={deepLinkTask}
           allTasks={project.tasks || []}
           isOpen={!!taskId}
-          onClose={() => navigate(`/projects/${id}/tasks`)}
+          onClose={() => navigate(deepLinkBackTo || `/projects/${id}/tasks`)}
           onUpdate={handleTaskUpdate}
           onDelete={handleTaskDelete}
           mode="view"
@@ -2067,7 +2073,7 @@ export default function ProjectDetail() {
           allIssues={project.issues || []}
           teamMembers={organizationMembers}
           isOpen={!!moduleId}
-          onClose={() => navigate(`/projects/${id}/modules`)}
+          onClose={() => navigate(deepLinkBackTo || `/projects/${id}/modules`)}
           onUpdate={handleModuleUpdate}
         />
       )}
@@ -2080,7 +2086,7 @@ export default function ProjectDetail() {
           modules={modules}
           assignableMembers={projectMembers}
           isOpen={!!milestoneId}
-          onClose={() => navigate(`/projects/${id}/milestones`)}
+          onClose={() => navigate(deepLinkBackTo || `/projects/${id}/milestones`)}
           onUpdate={handleMilestoneUpdate}
           onIssueUpdate={handleIssueUpdate}
         />
@@ -2092,7 +2098,7 @@ export default function ProjectDetail() {
           tasks={project.tasks || []}
           teamMembers={projectMembers}
           isOpen={!!issueId}
-          onClose={() => navigate(`/projects/${id}/issues`)}
+          onClose={() => navigate(deepLinkBackTo || `/projects/${id}/issues`)}
           onUpdate={handleIssueUpdate}
           onDelete={handleIssueDelete}
           userProjectRole={project?.myRole}
